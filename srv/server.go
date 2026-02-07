@@ -90,6 +90,10 @@ func (s *Server) Serve(addr string) error {
 	mux.HandleFunc("GET /api/categories", s.HandleGetCategories)
 	mux.HandleFunc("POST /api/categories", s.HandleCreateCategory)
 
+	// OPML import/export
+	mux.HandleFunc("GET /api/opml/export", s.HandleExportOPML)
+	mux.HandleFunc("POST /api/opml/import", s.HandleImportOPML)
+
 	mux.HandleFunc("GET /api/counts", s.HandleGetCounts)
 
 	slog.Info("starting server", "addr", addr)

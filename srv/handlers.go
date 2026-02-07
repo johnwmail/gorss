@@ -408,3 +408,173 @@ func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
 		"starred": starred,
 	})
 }
+
+// HandleExportOPML exports feeds as OPML
+func (s *Server) HandleExportOPML(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	q := dbgen.New(s.DB)
+
+	feeds, err := q.GetFeeds(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "failed to list feeds", http.StatusInternalServerError)
+		return
+	}
+
+	// Get categories for mapping
+	categories, _ := q.GetCategories(r.Context(), userID)
+	catMap := make(map[int64]string)
+	for _, c := range categories {
+		catMap[c.ID] = c.Title
+	}
+
+	// Build export list
+	var exports []FeedExport
+	for _, f := range feeds {
+		cat := ""
+		if f.CategoryID != nil {
+			cat = catMap[*f.CategoryID]
+		}
+		exports = append(exports, FeedExport{
+			URL:      f.Url,
+			Title:    f.Title,
+			SiteURL:  stringVal(f.SiteUrl),
+			Category: cat,
+		})
+	}
+
+	opml, err := GenerateOPML("GoRSS Export", exports)
+	if err != nil {
+		http.Error(w, "failed to generate OPML", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Disposition", "attachment; filename=gorss-feeds.opml")
+	w.Write(opml)
+}
+
+func stringVal(s string) string {
+	return s
+}
+
+// HandleImportOPML imports feeds from OPML
+func (s *Server) HandleImportOPML(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+
+	// Parse multipart form
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB max
+		jsonError(w, "failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		jsonError(w, "no file provided", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	feeds, err := ParseOPML(file)
+	if err != nil {
+		jsonError(w, "failed to parse OPML: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+
+	// Get or create categories
+	catMap := make(map[string]int64)
+	for _, f := range feeds {
+		if f.Category != "" && catMap[f.Category] == 0 {
+			// Try to find existing category
+			cats, _ := q.GetCategories(r.Context(), userID)
+			found := false
+			for _, c := range cats {
+				if c.Title == f.Category {
+					catMap[f.Category] = c.ID
+					found = true
+					break
+				}
+			}
+			if !found {
+				// Create category
+				cat, err := q.CreateCategory(r.Context(), dbgen.CreateCategoryParams{
+					UserID: userID,
+					Title:  f.Category,
+				})
+				if err == nil {
+					catMap[f.Category] = cat.ID
+				}
+			}
+		}
+	}
+
+	// Import feeds
+	imported := 0
+	skipped := 0
+	for _, f := range feeds {
+		// Check if feed already exists
+		existing, _ := q.GetFeeds(r.Context(), userID)
+		exists := false
+		for _, e := range existing {
+			if e.Url == f.URL {
+				exists = true
+				break
+			}
+		}
+		if exists {
+			skipped++
+			continue
+		}
+
+		// Subscribe to feed
+		var catID *int64
+		if f.Category != "" && catMap[f.Category] != 0 {
+			id := catMap[f.Category]
+			catID = &id
+		}
+
+		// Fetch feed
+		result, err := s.fetcher.Fetch(r.Context(), f.URL)
+		if err != nil {
+			slog.Warn("import feed fetch failed", "url", f.URL, "error", err)
+			skipped++
+			continue
+		}
+
+		// Create feed
+		feed, err := q.CreateFeed(r.Context(), dbgen.CreateFeedParams{
+			UserID:      userID,
+			CategoryID:  catID,
+			Url:         f.URL,
+			Title:       result.Title,
+			SiteUrl:     result.SiteURL,
+			Description: result.Description,
+		})
+		if err != nil {
+			slog.Warn("import feed create failed", "url", f.URL, "error", err)
+			skipped++
+			continue
+		}
+
+		// Store initial articles
+		for _, item := range result.Items {
+			q.UpsertArticle(r.Context(), dbgen.UpsertArticleParams{
+				FeedID:      feed.ID,
+				Guid:        item.GUID,
+				Url:         item.URL,
+				Title:       item.Title,
+				Content:     item.Content,
+				Author:      item.Author,
+				PublishedAt: item.PublishedAt,
+			})
+		}
+		imported++
+	}
+
+	jsonResponse(w, map[string]int{
+		"imported": imported,
+		"skipped":  skipped,
+		"total":    len(feeds),
+	})
+}
