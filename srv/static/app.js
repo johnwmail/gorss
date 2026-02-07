@@ -23,6 +23,7 @@
     loadArticles();
     setupEventListeners();
     setupKeyboardNav();
+    updateCounts();
   }
 
   // Event Listeners
@@ -341,6 +342,7 @@
     try {
       const res = await fetch('/api/counts');
       const data = await res.json();
+      document.getElementById('count-all').textContent = data.total || 0;
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
       

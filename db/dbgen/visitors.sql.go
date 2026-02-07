@@ -636,6 +636,20 @@ func (q *Queries) GetStarredCount(ctx context.Context, userID string) (int64, er
 	return count, err
 }
 
+const getTotalArticleCount = `-- name: GetTotalArticleCount :one
+SELECT COUNT(*) as count
+FROM articles a
+JOIN feeds f ON a.feed_id = f.id
+WHERE f.user_id = ?
+`
+
+func (q *Queries) GetTotalArticleCount(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTotalArticleCount, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getUnreadArticles = `-- name: GetUnreadArticles :many
 SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, a.published_at, a.created_at, f.title as feed_title, f.site_url as feed_site_url,
   COALESCE(s.is_read, 0) as is_read,

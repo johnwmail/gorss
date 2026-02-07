@@ -400,6 +400,7 @@ func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
 	userID, _ := s.ensureUser(r)
 	q := dbgen.New(s.DB)
 
+	total, _ := q.GetTotalArticleCount(r.Context(), userID)
 	unread, _ := q.GetUnreadCount(r.Context(), userID)
 	starred, _ := q.GetStarredCount(r.Context(), userID)
 
@@ -413,6 +414,7 @@ func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, map[string]interface{}{
+		"total":   total,
 		"unread":  unread,
 		"starred": starred,
 		"feeds":   feedCounts,

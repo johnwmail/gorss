@@ -213,6 +213,12 @@ JOIN feeds f ON a.feed_id = f.id
 LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
 WHERE f.user_id = ? AND (s.is_read IS NULL OR s.is_read = 0);
 
+-- name: GetTotalArticleCount :one
+SELECT COUNT(*) as count
+FROM articles a
+JOIN feeds f ON a.feed_id = f.id
+WHERE f.user_id = ?;
+
 -- name: GetStarredCount :one
 SELECT COUNT(*) as count
 FROM article_states s
