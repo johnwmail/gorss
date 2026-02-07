@@ -1,62 +1,62 @@
 # GoRSS Implementation Plan
 
-## Phase 1: Core Data Model & Database (CURRENT)
+## Phase 1: Core Data Model & Database ✅
 
 - [x] Database schema design
   - users, categories, feeds, articles, article_states tables
   - Indexes for performance
 - [x] sqlc queries for CRUD operations
-- [ ] Run migrations and verify schema
+- [x] Run migrations and verify schema
 
-## Phase 2: Feed Management
+## Phase 2: Feed Management ✅
 
-- [ ] Feed subscription (add feed URL)
-- [ ] Feed fetching with gofeed library
-- [ ] Parse RSS/Atom and store articles
-- [ ] Category management (create, rename, delete)
-- [ ] Assign feeds to categories
-- [ ] Unsubscribe from feeds
+- [x] Feed subscription (add feed URL)
+- [x] Feed fetching with gofeed library
+- [x] Parse RSS/Atom and store articles
+- [x] Category management (create)
+- [ ] Assign feeds to categories (UI pending)
+- [x] Unsubscribe from feeds
 
-## Phase 3: Article Display & Reading
+## Phase 3: Article Display & Reading ✅
 
-- [ ] Main UI layout (sidebar + article list)
+- [x] Main UI layout (sidebar + article list)
   - Left sidebar: Special views + Categories + Feeds
   - Right area: Article list with expanded content
-- [ ] Article list views:
+- [x] Article list views:
   - All articles
   - Fresh (unread)
   - Starred
   - By feed
-  - By category
-- [ ] Article content display (expanded inline, like TT-RSS)
-- [ ] Unread counts on feeds/categories
+  - By category (pending)
+- [x] Article content display (expanded inline, like TT-RSS)
+- [x] Unread counts on feeds/categories
 
-## Phase 4: Article State Management
+## Phase 4: Article State Management ✅
 
-- [ ] Mark article as read/unread
-- [ ] Star/unstar articles
-- [ ] Mark feed as read
-- [ ] Mark all as read
+- [x] Mark article as read/unread
+- [x] Star/unstar articles
+- [x] Mark feed as read
+- [ ] Mark all as read (API exists, UI pending)
 
-## Phase 5: Keyboard Navigation (Vi-style)
+## Phase 5: Keyboard Navigation (Vi-style) ✅
 
-- [ ] `j` / `n` - Next article
-- [ ] `k` / `p` - Previous article  
-- [ ] `o` / `Enter` - Open article in new tab
-- [ ] `s` - Toggle star
-- [ ] `u` - Toggle read/unread
-- [ ] `r` - Refresh feeds
-- [ ] `?` - Show keyboard shortcuts help
-- [ ] `g a` - Go to All articles
-- [ ] `g f` - Go to Fresh articles
-- [ ] `g s` - Go to Starred articles
+- [x] `j` / `↓` - Next article
+- [x] `k` / `↑` - Previous article  
+- [x] `o` / `Enter` - Open article in new tab
+- [x] `s` - Toggle star
+- [x] `u` - Toggle read/unread
+- [x] `r` - Refresh feeds
+- [x] `?` - Show keyboard shortcuts help
+- [x] `g a` - Go to All articles
+- [x] `g f` - Go to Fresh articles
+- [x] `g s` - Go to Starred articles
 
-## Phase 6: Background Feed Refresh
+## Phase 6: Background Feed Refresh ✅
 
-- [ ] Goroutine for periodic feed updates
-- [ ] Configurable refresh interval
-- [ ] Update feed error status
-- [ ] Manual refresh trigger
+- [x] Goroutine for periodic feed updates
+- [x] Configurable refresh interval
+- [x] Update feed error status
+- [x] Manual refresh trigger
 
 ## Phase 7: Search & Filters
 

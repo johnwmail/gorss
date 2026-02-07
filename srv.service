@@ -1,18 +1,16 @@
 [Unit]
-Description=Go web server
+Description=GoRSS - RSS Reader
+After=network.target
 
 [Service]
 Type=simple
 User=exedev
-Group=exedev
-WorkingDirectory=/home/exedev
-ExecStart=/home/exedev/srv
+WorkingDirectory=/home/exedev/gorss
+ExecStart=/home/exedev/gorss/gorss
+Environment=GORSS_DB_PATH=/home/exedev/gorss/data/gorss.db
+Environment=GORSS_LISTEN=:8000
 Restart=always
 RestartSec=5
-Environment=HOME=/home/exedev
-Environment=USER=exedev
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
