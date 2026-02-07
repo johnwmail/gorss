@@ -343,6 +343,27 @@
       const data = await res.json();
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
+      
+      // Update per-feed counts
+      if (data.feeds) {
+        document.querySelectorAll('[data-feed-id]').forEach(el => {
+          const feedId = el.dataset.feedId;
+          const countEl = el.querySelector('.count');
+          const count = data.feeds[feedId] || 0;
+          if (count > 0) {
+            if (countEl) {
+              countEl.textContent = count;
+            } else {
+              const span = document.createElement('span');
+              span.className = 'count';
+              span.textContent = count;
+              el.appendChild(span);
+            }
+          } else if (countEl) {
+            countEl.remove();
+          }
+        });
+      }
     } catch (e) {}
   }
 

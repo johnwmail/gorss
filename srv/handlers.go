@@ -395,7 +395,7 @@ func (s *Server) HandleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, cat)
 }
 
-// HandleGetCounts returns unread and starred counts
+// HandleGetCounts returns unread and starred counts, plus per-feed counts
 func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
 	userID, _ := s.ensureUser(r)
 	q := dbgen.New(s.DB)
@@ -403,9 +403,19 @@ func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
 	unread, _ := q.GetUnreadCount(r.Context(), userID)
 	starred, _ := q.GetStarredCount(r.Context(), userID)
 
-	jsonResponse(w, map[string]int64{
+	// Get per-feed unread counts
+	feeds, _ := q.GetFeeds(r.Context(), userID)
+	feedCounts := make(map[int64]int64)
+	for _, f := range feeds {
+		if f.UnreadCount > 0 {
+			feedCounts[f.ID] = f.UnreadCount
+		}
+	}
+
+	jsonResponse(w, map[string]interface{}{
 		"unread":  unread,
 		"starred": starred,
+		"feeds":   feedCounts,
 	})
 }
 
