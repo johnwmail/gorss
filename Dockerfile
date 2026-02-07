@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -8,6 +8,7 @@ RUN apk add --no-cache gcc musl-dev
 
 # Copy go mod files first for caching
 COPY go.mod go.sum ./
+ENV GOTOOLCHAIN=auto
 RUN go mod download
 
 # Copy source code
@@ -34,8 +35,8 @@ COPY --from=builder /app/gorss .
 COPY --from=builder /app/srv/templates ./srv/templates
 COPY --from=builder /app/srv/static ./srv/static
 
-# Create data directory for SQLite
-RUN mkdir -p /data && chown gorss:gorss /data
+# Create data directory for SQLite and set permissions
+RUN mkdir -p /data && chown -R gorss:gorss /data /app
 
 # Switch to non-root user
 USER gorss
