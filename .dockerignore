@@ -1,0 +1,22 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Development
+*.db
+*.sqlite3
+db.sqlite3
+
+# IDE
+.vscode
+.idea
+
+# Test files
+*_test.go
+
+# Local config
+.env.local

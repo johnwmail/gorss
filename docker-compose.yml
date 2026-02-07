@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  gorss:
+    build: .
+    container_name: gorss
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - gorss-data:/data
+    environment:
+      - GORSS_DB_PATH=/data/gorss.db
+      - GORSS_LISTEN=:8000
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  gorss-data:
+    driver: local
