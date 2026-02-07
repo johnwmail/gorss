@@ -79,6 +79,12 @@
     // Mark all read
     document.getElementById('btn-mark-all-read').addEventListener('click', handleMarkAllRead);
 
+    // Mark as read on scroll (TT-RSS style)
+    const articleList = document.getElementById('articles-list');
+    if (articleList) {
+      articleList.addEventListener('scroll', handleScrollMarkRead);
+    }
+
     // Close modals
     document.querySelectorAll('[data-close-modal]').forEach(el => {
       el.addEventListener('click', () => {
@@ -249,6 +255,33 @@
 
   async function markRead(id) {
     await fetch(`/api/articles/${id}/read`, { method: 'POST' });
+  }
+
+  // Mark articles as read when scrolled past (TT-RSS style)
+  let scrollMarkReadTimeout = null;
+  function handleScrollMarkRead() {
+    if (scrollMarkReadTimeout) clearTimeout(scrollMarkReadTimeout);
+    scrollMarkReadTimeout = setTimeout(() => {
+      const articleList = document.getElementById('articles-list');
+      if (!articleList) return;
+      
+      const articleElements = articleList.querySelectorAll('.article');
+      const listRect = articleList.getBoundingClientRect();
+      
+      articleElements.forEach((el, index) => {
+        const rect = el.getBoundingClientRect();
+        // If article is scrolled above the visible area (user has scrolled past it)
+        if (rect.bottom < listRect.top + 50) {
+          const article = articles[index];
+          if (article && !article.is_read) {
+            markRead(article.id);
+            article.is_read = 1;
+            el.classList.remove('unread');
+          }
+        }
+      });
+      updateCounts();
+    }, 300); // Debounce 300ms
   }
 
   async function markUnread(id) {
