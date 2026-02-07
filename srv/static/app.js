@@ -266,22 +266,30 @@
       const articleList = document.getElementById('articles-list');
       if (!articleList) return;
       
-      const articleElements = articleList.querySelectorAll('.article');
+      const articleElements = articleList.querySelectorAll('.article.unread');
       const listRect = articleList.getBoundingClientRect();
+      let markedAny = false;
       
-      articleElements.forEach((el, index) => {
+      articleElements.forEach((el) => {
         const rect = el.getBoundingClientRect();
         // If article is scrolled above the visible area (user has scrolled past it)
         if (rect.bottom < listRect.top + 50) {
-          const article = articles[index];
-          if (article && !article.is_read) {
-            markRead(article.id);
-            article.is_read = 1;
+          const articleId = parseInt(el.dataset.id);
+          const index = parseInt(el.dataset.index);
+          if (articleId) {
+            markRead(articleId);
             el.classList.remove('unread');
+            // Update local state
+            if (articles[index]) {
+              articles[index].is_read = 1;
+            }
+            markedAny = true;
           }
         }
       });
-      updateCounts();
+      if (markedAny) {
+        updateCounts();
+      }
     }, 300); // Debounce 300ms
   }
 
