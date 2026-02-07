@@ -60,6 +60,19 @@
     // Add feed form
     document.getElementById('form-add-feed').addEventListener('submit', handleAddFeed);
 
+    // Import OPML button
+    document.getElementById('btn-import').addEventListener('click', () => {
+      document.getElementById('modal-import').classList.add('open');
+    });
+
+    // Export OPML button
+    document.getElementById('btn-export').addEventListener('click', () => {
+      window.location.href = '/api/opml/export';
+    });
+
+    // Import form
+    document.getElementById('form-import').addEventListener('submit', handleImport);
+
     // Refresh button
     document.getElementById('btn-refresh').addEventListener('click', handleRefresh);
 
@@ -298,6 +311,45 @@
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
     } catch (e) {}
+  }
+
+  async function handleImport(e) {
+    e.preventDefault();
+    const form = e.target;
+    const fileInput = form.querySelector('input[type="file"]');
+    if (!fileInput.files.length) return;
+
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Importing...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+      const res = await fetch('/api/opml/import', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to import');
+        return;
+      }
+
+      const resultDiv = document.getElementById('import-result');
+      resultDiv.style.display = 'block';
+      resultDiv.textContent = `Imported ${data.imported} feeds, skipped ${data.skipped} (total: ${data.total})`;
+
+      // Reload after 2 seconds
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Import';
+    }
   }
 
   async function handleAddFeed(e) {

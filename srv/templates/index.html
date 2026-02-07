@@ -13,6 +13,8 @@
       <div class="sidebar-header">
         <h1>GoRSS</h1>
         <button id="btn-add-feed" class="btn-icon" title="Add Feed">+</button>
+        <button id="btn-import" class="btn-icon" title="Import OPML">📥</button>
+        <button id="btn-export" class="btn-icon" title="Export OPML">📤</button>
       </div>
 
       <nav class="nav-special">
@@ -51,7 +53,6 @@
       </div>
 
       <div class="sidebar-footer">
-        <span class="user-email">{{if .UserEmail}}{{.UserEmail}}{{else}}Not signed in{{end}}</span>
         <button id="btn-refresh" class="btn-icon" title="Refresh Feeds">🔄</button>
       </div>
     </aside>
@@ -88,6 +89,22 @@
           <button type="submit" class="btn btn-primary">Subscribe</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Import OPML Modal -->
+  <div class="modal" id="modal-import">
+    <div class="modal-content">
+      <h2>Import OPML</h2>
+      <form id="form-import" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".opml,.xml" required>
+        <p class="hint">Select an OPML file exported from TT-RSS or other RSS readers.</p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-cancel" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary">Import</button>
+        </div>
+      </form>
+      <div id="import-result" style="display:none; margin-top: 1rem; padding: 0.5rem; background: #e8f5e9; border-radius: 4px;"></div>
     </div>
   </div>
 
