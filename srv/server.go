@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
@@ -23,22 +21,7 @@ type Server struct {
 	Hostname     string
 	TemplatesDir string
 	StaticDir    string
-}
-
-type pageData struct {
-	Hostname   string
-	Now        string
-	UserEmail  string
-	VisitCount int64
-	LoginURL   string
-	LogoutURL  string
-	Headers    []headerEntry
-}
-
-type headerEntry struct {
-	Name       string
-	Values     []string
-	AddedByExe bool
+	fetcher      *FeedFetcher
 }
 
 func New(dbPath, hostname string) (*Server, error) {
@@ -48,6 +31,7 @@ func New(dbPath, hostname string) (*Server, error) {
 		Hostname:     hostname,
 		TemplatesDir: filepath.Join(baseDir, "templates"),
 		StaticDir:    filepath.Join(baseDir, "static"),
+		fetcher:      NewFeedFetcher(),
 	}
 	if err := srv.setUpDatabase(dbPath); err != nil {
 		return nil, err
@@ -55,90 +39,13 @@ func New(dbPath, hostname string) (*Server, error) {
 	return srv, nil
 }
 
-func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
-	// Identity from proxy headers (if present)
-	// UserID is stable; email is useful.
-	userID := strings.TrimSpace(r.Header.Get("X-ExeDev-UserID"))
-	userEmail := strings.TrimSpace(r.Header.Get("X-ExeDev-Email"))
-	now := time.Now()
-
-	var count int64
-	if userID != "" && s.DB != nil {
-		q := dbgen.New(s.DB)
-		shouldRecordView := r.Method == http.MethodGet
-		if shouldRecordView {
-			// Best effort
-			err := q.UpsertVisitor(r.Context(), dbgen.UpsertVisitorParams{
-				ID:        userID,
-				CreatedAt: now,
-				LastSeen:  now,
-			})
-			if err != nil {
-				slog.Warn("upsert visitor", "error", err, "user_id", userID)
-			}
-		}
-		if v, err := q.VisitorWithID(r.Context(), userID); err == nil {
-			count = v.ViewCount
-		}
-	}
-
-	data := pageData{
-		Hostname:   s.Hostname,
-		Now:        now.Format(time.RFC3339),
-		UserEmail:  userEmail,
-		VisitCount: count,
-		LoginURL:   loginURLForRequest(r),
-		LogoutURL:  "/__exe.dev/logout",
-		Headers:    buildHeaderEntries(r),
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.renderTemplate(w, "welcome.html", data); err != nil {
-		slog.Warn("render template", "url", r.URL.Path, "error", err)
-	}
-}
-
-func loginURLForRequest(r *http.Request) string {
-	path := r.URL.RequestURI()
-	v := url.Values{}
-	v.Set("redirect", path)
-	return "/__exe.dev/login?" + v.Encode()
-}
-
-func (s *Server) renderTemplate(w http.ResponseWriter, name string, data any) error {
-	path := filepath.Join(s.TemplatesDir, name)
-	tmpl, err := template.ParseFiles(path)
-	if err != nil {
-		return fmt.Errorf("parse template %q: %w", name, err)
-	}
-	if err := tmpl.Execute(w, data); err != nil {
-		return fmt.Errorf("execute template %q: %w", name, err)
-	}
-	return nil
-}
-
-func mainDomainFromHost(h string) string {
-	host, port, err := net.SplitHostPort(h)
-	if err != nil {
-		host = strings.TrimSpace(h)
-	}
-	if port != "" {
-		port = ":" + port
-	}
-	// Check for exe.cloud-based domains (dev mode)
-	if strings.HasSuffix(host, ".exe.cloud") || host == "exe.cloud" {
-		return "exe.cloud" + port
-	}
-	// Check for exe.dev-based domains (production)
-	if strings.HasSuffix(host, ".exe.dev") || host == "exe.dev" {
-		return "exe.dev"
-	}
-	// Return as-is for custom domains
-	return host
-}
-
-// SetupDatabase initializes the database connection and runs migrations
+// setUpDatabase initializes the database connection and runs migrations
 func (s *Server) setUpDatabase(dbPath string) error {
+	// Support env var override
+	if envPath := os.Getenv("GORSS_DB_PATH"); envPath != "" {
+		dbPath = envPath
+	}
+
 	wdb, err := db.Open(dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open db: %w", err)
@@ -152,36 +59,96 @@ func (s *Server) setUpDatabase(dbPath string) error {
 
 // Serve starts the HTTP server with the configured routes
 func (s *Server) Serve(addr string) error {
+	// Support env var override
+	if envAddr := os.Getenv("GORSS_LISTEN"); envAddr != "" {
+		addr = envAddr
+	}
+
 	mux := http.NewServeMux()
+
+	// Main app
 	mux.HandleFunc("GET /{$}", s.HandleRoot)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(s.StaticDir))))
+
+	// Health check
+	mux.HandleFunc("GET /health", s.HandleHealth)
+
+	// API routes
+	mux.HandleFunc("GET /api/feeds", s.HandleGetFeeds)
+	mux.HandleFunc("POST /api/feeds", s.HandleSubscribe)
+	mux.HandleFunc("DELETE /api/feeds/{id}", s.HandleUnsubscribe)
+
+	mux.HandleFunc("GET /api/articles", s.HandleGetArticles)
+	mux.HandleFunc("POST /api/articles/{id}/read", s.HandleMarkRead)
+	mux.HandleFunc("POST /api/articles/{id}/unread", s.HandleMarkUnread)
+	mux.HandleFunc("POST /api/articles/{id}/star", s.HandleStar)
+	mux.HandleFunc("POST /api/articles/{id}/unstar", s.HandleUnstar)
+
+	mux.HandleFunc("POST /api/feeds/{id}/mark-read", s.HandleMarkFeedRead)
+	mux.HandleFunc("POST /api/refresh", s.HandleRefresh)
+
+	mux.HandleFunc("GET /api/categories", s.HandleGetCategories)
+	mux.HandleFunc("POST /api/categories", s.HandleCreateCategory)
+
+	mux.HandleFunc("GET /api/counts", s.HandleGetCounts)
+
 	slog.Info("starting server", "addr", addr)
 	return http.ListenAndServe(addr, mux)
 }
 
-func buildHeaderEntries(r *http.Request) []headerEntry {
-	if r == nil {
-		return nil
+// HandleRoot serves the main application page
+func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
+	userID := strings.TrimSpace(r.Header.Get("X-ExeDev-UserID"))
+	userEmail := strings.TrimSpace(r.Header.Get("X-ExeDev-Email"))
+	now := time.Now()
+
+	if userID == "" {
+		userID = "anonymous"
 	}
 
-	headers := make([]headerEntry, 0, len(r.Header)+1)
-	for name, values := range r.Header {
-		lower := strings.ToLower(name)
-		headers = append(headers, headerEntry{
-			Name:       name,
-			Values:     values,
-			AddedByExe: strings.HasPrefix(lower, "x-exedev-") || strings.HasPrefix(lower, "x-forwarded-"),
-		})
-	}
-	if r.Host != "" {
-		headers = append(headers, headerEntry{
-			Name:   "Host",
-			Values: []string{r.Host},
-		})
-	}
-
-	sort.Slice(headers, func(i, j int) bool {
-		return strings.ToLower(headers[i].Name) < strings.ToLower(headers[j].Name)
+	// Ensure user exists
+	q := dbgen.New(s.DB)
+	q.UpsertUser(r.Context(), dbgen.UpsertUserParams{
+		ID:        userID,
+		Email:     &userEmail,
+		CreatedAt: now,
+		LastSeen:  now,
 	})
-	return headers
+
+	// Get counts
+	unreadCount, _ := q.GetUnreadCount(r.Context(), userID)
+	starredCount, _ := q.GetStarredCount(r.Context(), userID)
+
+	// Get feeds with unread counts
+	feeds, _ := q.GetFeeds(r.Context(), userID)
+
+	// Get categories
+	categories, _ := q.GetCategories(r.Context(), userID)
+
+	data := map[string]any{
+		"Hostname":     s.Hostname,
+		"UserEmail":    userEmail,
+		"UserID":       userID,
+		"UnreadCount":  unreadCount,
+		"StarredCount": starredCount,
+		"Feeds":        feeds,
+		"Categories":   categories,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.renderTemplate(w, "index.html", data); err != nil {
+		slog.Warn("render template", "url", r.URL.Path, "error", err)
+	}
+}
+
+func (s *Server) renderTemplate(w http.ResponseWriter, name string, data any) error {
+	path := filepath.Join(s.TemplatesDir, name)
+	tmpl, err := template.ParseFiles(path)
+	if err != nil {
+		return fmt.Errorf("parse template %q: %w", name, err)
+	}
+	if err := tmpl.Execute(w, data); err != nil {
+		return fmt.Errorf("execute template %q: %w", name, err)
+	}
+	return nil
 }

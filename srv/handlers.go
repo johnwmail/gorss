@@ -1,0 +1,410 @@
+package srv
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"srv.exe.dev/db/dbgen"
+)
+
+// JSON response helper
+func jsonResponse(w http.ResponseWriter, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func jsonError(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// getUserID extracts user ID from exe.dev headers
+func getUserID(r *http.Request) string {
+	return strings.TrimSpace(r.Header.Get("X-ExeDev-UserID"))
+}
+
+func getUserEmail(r *http.Request) string {
+	return strings.TrimSpace(r.Header.Get("X-ExeDev-Email"))
+}
+
+// ensureUser creates or updates user record
+func (s *Server) ensureUser(r *http.Request) (string, error) {
+	userID := getUserID(r)
+	if userID == "" {
+		userID = "anonymous"
+	}
+
+	email := getUserEmail(r)
+	now := time.Now()
+
+	q := dbgen.New(s.DB)
+	err := q.UpsertUser(r.Context(), dbgen.UpsertUserParams{
+		ID:        userID,
+		Email:     &email,
+		CreatedAt: now,
+		LastSeen:  now,
+	})
+	return userID, err
+}
+
+// HandleHealth returns health status
+func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// HandleGetFeeds returns all feeds for the user
+func (s *Server) HandleGetFeeds(w http.ResponseWriter, r *http.Request) {
+	userID, err := s.ensureUser(r)
+	if err != nil {
+		slog.Warn("ensure user", "error", err)
+	}
+
+	q := dbgen.New(s.DB)
+	feeds, err := q.GetFeeds(r.Context(), userID)
+	if err != nil {
+		jsonError(w, "failed to get feeds", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, feeds)
+}
+
+// HandleSubscribe subscribes to a new feed
+func (s *Server) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
+	userID, err := s.ensureUser(r)
+	if err != nil {
+		slog.Warn("ensure user", "error", err)
+	}
+
+	var req struct {
+		URL        string `json:"url"`
+		CategoryID *int64 `json:"category_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.URL == "" {
+		jsonError(w, "url is required", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch feed to get title
+	result, err := s.fetcher.Fetch(r.Context(), req.URL)
+	if err != nil {
+		jsonError(w, "failed to fetch feed: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	feed, err := q.CreateFeed(r.Context(), dbgen.CreateFeedParams{
+		UserID:      userID,
+		CategoryID:  req.CategoryID,
+		Url:         req.URL,
+		Title:       result.Title,
+		SiteUrl:     result.SiteURL,
+		Description: result.Description,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			jsonError(w, "already subscribed to this feed", http.StatusConflict)
+			return
+		}
+		jsonError(w, "failed to create feed", http.StatusInternalServerError)
+		return
+	}
+
+	// Store initial articles
+	for _, item := range result.Items {
+		q.UpsertArticle(r.Context(), dbgen.UpsertArticleParams{
+			FeedID:      feed.ID,
+			Guid:        item.GUID,
+			Url:         item.URL,
+			Title:       item.Title,
+			Author:      item.Author,
+			Content:     item.Content,
+			Summary:     item.Summary,
+			PublishedAt: item.PublishedAt,
+		})
+	}
+
+	jsonResponse(w, feed)
+}
+
+// HandleUnsubscribe removes a feed subscription
+func (s *Server) HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	feedID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid feed id", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	if err := q.DeleteFeed(r.Context(), dbgen.DeleteFeedParams{
+		ID:     feedID,
+		UserID: userID,
+	}); err != nil {
+		jsonError(w, "failed to delete feed", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// HandleGetArticles returns articles with optional filters
+func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	q := dbgen.New(s.DB)
+
+	limit := int64(50)
+	offset := int64(0)
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.ParseInt(l, 10, 64); err == nil {
+			limit = parsed
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.ParseInt(o, 10, 64); err == nil {
+			offset = parsed
+		}
+	}
+
+	view := r.URL.Query().Get("view")
+	feedID := r.URL.Query().Get("feed_id")
+
+	var articles []dbgen.GetArticlesRow
+	var err error
+
+	switch {
+	case view == "starred":
+		starred, e := q.GetStarredArticles(r.Context(), dbgen.GetStarredArticlesParams{
+			UserID:   userID,
+			UserID_2: userID,
+			Limit:    limit,
+			Offset:   offset,
+		})
+		err = e
+		for _, a := range starred {
+			articles = append(articles, dbgen.GetArticlesRow(a))
+		}
+	case view == "unread" || view == "fresh":
+		unread, e := q.GetUnreadArticles(r.Context(), dbgen.GetUnreadArticlesParams{
+			UserID:   userID,
+			UserID_2: userID,
+			Limit:    limit,
+			Offset:   offset,
+		})
+		err = e
+		for _, a := range unread {
+			articles = append(articles, dbgen.GetArticlesRow(a))
+		}
+	case feedID != "":
+		fid, _ := strconv.ParseInt(feedID, 10, 64)
+		byFeed, e := q.GetArticlesByFeed(r.Context(), dbgen.GetArticlesByFeedParams{
+			UserID:   userID,
+			ID:       fid,
+			UserID_2: userID,
+			Limit:    limit,
+			Offset:   offset,
+		})
+		err = e
+		for _, a := range byFeed {
+			articles = append(articles, dbgen.GetArticlesRow(a))
+		}
+	default:
+		articles, err = q.GetArticles(r.Context(), dbgen.GetArticlesParams{
+			UserID:   userID,
+			UserID_2: userID,
+			Limit:    limit,
+			Offset:   offset,
+		})
+	}
+
+	if err != nil {
+		slog.Error("get articles", "error", err)
+		jsonError(w, "failed to get articles", http.StatusInternalServerError)
+		return
+	}
+
+	if articles == nil {
+		articles = []dbgen.GetArticlesRow{}
+	}
+	jsonResponse(w, articles)
+}
+
+// HandleMarkRead marks an article as read
+func (s *Server) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid article id", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	now := time.Now()
+	if err := q.SetArticleRead(r.Context(), dbgen.SetArticleReadParams{
+		UserID:    userID,
+		ArticleID: articleID,
+		ReadAt:    &now,
+	}); err != nil {
+		jsonError(w, "failed to mark read", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// HandleMarkUnread marks an article as unread
+func (s *Server) HandleMarkUnread(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid article id", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	if err := q.SetArticleUnread(r.Context(), dbgen.SetArticleUnreadParams{
+		UserID:    userID,
+		ArticleID: articleID,
+	}); err != nil {
+		jsonError(w, "failed to mark unread", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// HandleStar stars an article
+func (s *Server) HandleStar(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid article id", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	now := time.Now()
+	if err := q.SetArticleStarred(r.Context(), dbgen.SetArticleStarredParams{
+		UserID:    userID,
+		ArticleID: articleID,
+		StarredAt: &now,
+	}); err != nil {
+		jsonError(w, "failed to star", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// HandleUnstar unstars an article
+func (s *Server) HandleUnstar(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid article id", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	if err := q.SetArticleUnstarred(r.Context(), dbgen.SetArticleUnstarredParams{
+		UserID:    userID,
+		ArticleID: articleID,
+	}); err != nil {
+		jsonError(w, "failed to unstar", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// HandleMarkFeedRead marks all articles in a feed as read
+func (s *Server) HandleMarkFeedRead(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	feedID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid feed id", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	now := time.Now()
+	if err := q.MarkFeedRead(r.Context(), dbgen.MarkFeedReadParams{
+		UserID: userID,
+		ReadAt: &now,
+		FeedID: feedID,
+	}); err != nil {
+		jsonError(w, "failed to mark feed read", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// HandleRefresh triggers a feed refresh
+func (s *Server) HandleRefresh(w http.ResponseWriter, r *http.Request) {
+	go s.refreshAllFeeds(r.Context())
+	jsonResponse(w, map[string]string{"status": "refreshing"})
+}
+
+// HandleGetCategories returns all categories
+func (s *Server) HandleGetCategories(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	q := dbgen.New(s.DB)
+
+	categories, err := q.GetCategories(r.Context(), userID)
+	if err != nil {
+		jsonError(w, "failed to get categories", http.StatusInternalServerError)
+		return
+	}
+	if categories == nil {
+		categories = []dbgen.Category{}
+	}
+	jsonResponse(w, categories)
+}
+
+// HandleCreateCategory creates a new category
+func (s *Server) HandleCreateCategory(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Title == "" {
+		jsonError(w, "title is required", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+	cat, err := q.CreateCategory(r.Context(), dbgen.CreateCategoryParams{
+		UserID: userID,
+		Title:  req.Title,
+	})
+	if err != nil {
+		jsonError(w, "failed to create category", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, cat)
+}
+
+// HandleGetCounts returns unread and starred counts
+func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	q := dbgen.New(s.DB)
+
+	unread, _ := q.GetUnreadCount(r.Context(), userID)
+	starred, _ := q.GetStarredCount(r.Context(), userID)
+
+	jsonResponse(w, map[string]int64{
+		"unread":  unread,
+		"starred": starred,
+	})
+}
