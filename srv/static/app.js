@@ -245,7 +245,7 @@
         <div class="article-content" id="content-${a.id}">${a.content || a.summary || ''}</div>
         <div class="article-actions">
           <button class="article-btn" data-action="star" data-id="${a.id}">${a.is_starred ? '★ Unstar' : '☆ Star'}</button>
-          <button class="article-btn" data-action="read" data-id="${a.id}">${a.is_read ? '○ Unread' : '● Read'}</button>
+          <button class="article-btn" data-action="read" data-id="${a.id}">${a.is_read ? '● Read' : '○ Unread'}</button>
           <button class="article-btn" data-action="open" data-url="${escapeHtml(a.url)}">↗ Open</button>
         </div>
       </article>
@@ -372,7 +372,7 @@
     }
 
     const btn = el.querySelector('[data-action="read"]');
-    if (btn) btn.textContent = article.is_read ? '○ Unread' : '● Read';
+    if (btn) btn.textContent = article.is_read ? '● Read' : '○ Unread';
 
     await updateCounts();
   }
