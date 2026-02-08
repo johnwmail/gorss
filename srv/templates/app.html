@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GoRSS</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar (visible on desktop, drawer on mobile) -->
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-logo">GoRSS</span>
+        <div class="header-actions">
+          <button class="header-btn" id="btn-add-feed" title="Add Feed">+</button>
+          <button class="header-btn" id="btn-import" title="Import OPML">📥</button>
+          <button class="header-btn" id="btn-export" title="Export OPML">📤</button>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <a href="#" class="nav-item active" data-view="all">
+            <span class="icon">📰</span>
+            <span class="label">All Articles</span>
+            <span class="count" id="count-all">0</span>
+          </a>
+          <a href="#" class="nav-item" data-view="fresh">
+            <span class="icon">🆕</span>
+            <span class="label">Fresh</span>
+            <span class="count" id="count-fresh">0</span>
+          </a>
+          <a href="#" class="nav-item" data-view="starred">
+            <span class="icon">⭐</span>
+            <span class="label">Starred</span>
+            <span class="count" id="count-starred">0</span>
+          </a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Feeds</div>
+          <div id="feeds-list"></div>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="btn-refresh" class="btn-icon" title="Refresh Feeds">🔄</button>
+        <button id="btn-mark-all-read" class="btn-icon" title="Mark All Read">✓</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <header class="main-header">
+        <button class="menu-btn" id="btn-menu">☰</button>
+        <h1 class="main-title" id="current-view">All Articles</h1>
+      </header>
+      <div class="articles-container" id="articles-list"></div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal" id="modal-add-feed">
+    <div class="modal-content">
+      <h2>Subscribe to Feed</h2>
+      <form id="form-add-feed">
+        <input type="url" name="url" placeholder="https://example.com/feed.xml" required>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel">Cancel</button>
+          <button type="submit" class="btn-primary">Subscribe</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-import">
+    <div class="modal-content">
+      <h2>Import OPML</h2>
+      <form id="form-import">
+        <input type="file" name="file" accept=".opml,.xml" required>
+        <div id="import-result"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel">Cancel</button>
+          <button type="submit" class="btn-primary">Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-help">
+    <div class="modal-content">
+      <h2>Keyboard Shortcuts</h2>
+      <div class="shortcuts">
+        <div class="shortcut"><kbd>j</kbd> / <kbd>↓</kbd> Next article</div>
+        <div class="shortcut"><kbd>k</kbd> / <kbd>↑</kbd> Previous article</div>
+        <div class="shortcut"><kbd>o</kbd> / <kbd>Enter</kbd> Open article</div>
+        <div class="shortcut"><kbd>s</kbd> Toggle star</div>
+        <div class="shortcut"><kbd>u</kbd> Toggle read/unread</div>
+        <div class="shortcut"><kbd>r</kbd> Refresh feeds</div>
+        <div class="shortcut"><kbd>?</kbd> Show help</div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="fab" id="btn-fab-refresh" title="Refresh">🔄</button>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

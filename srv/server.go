@@ -75,8 +75,13 @@ func (s *Server) Serve(addr string) error {
 
 	// Main app
 	mux.HandleFunc("GET /{$}", s.HandleRoot)
-	mux.HandleFunc("GET /mobile/", s.HandleMobile)
-	mux.HandleFunc("GET /mobile", s.HandleMobile)
+	// Legacy mobile routes redirect to main app (now responsive)
+	mux.HandleFunc("GET /mobile/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("GET /mobile", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(s.StaticDir))))
 
 	// Health check
@@ -146,35 +151,8 @@ func (s *Server) Serve(addr string) error {
 	return http.ListenAndServe(addr, handler)
 }
 
-// isMobile checks if the request is from a mobile device
-func isMobile(r *http.Request) bool {
-	ua := strings.ToLower(r.UserAgent())
-	mobileKeywords := []string{"mobile", "android", "iphone", "ipad", "ipod", "blackberry", "windows phone"}
-	for _, keyword := range mobileKeywords {
-		if strings.Contains(ua, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
-// HandleRoot serves the main application page (auto-detects mobile)
+// HandleRoot serves the unified responsive application page
 func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
-	// Auto-redirect mobile devices to mobile page
-	if isMobile(r) {
-		http.Redirect(w, r, "/mobile/", http.StatusFound)
-		return
-	}
-	s.serveApp(w, r, "index.html")
-}
-
-// HandleMobile serves the mobile application page
-func (s *Server) HandleMobile(w http.ResponseWriter, r *http.Request) {
-	s.serveApp(w, r, "mobile.html")
-}
-
-// serveApp serves either desktop or mobile template
-func (s *Server) serveApp(w http.ResponseWriter, r *http.Request, templateName string) {
 	userID := strings.TrimSpace(r.Header.Get("X-ExeDev-UserID"))
 	userEmail := strings.TrimSpace(r.Header.Get("X-ExeDev-Email"))
 	now := time.Now()
@@ -213,7 +191,7 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request, templateName s
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.renderTemplate(w, templateName, data); err != nil {
+	if err := s.renderTemplate(w, "app.html", data); err != nil {
 		slog.Warn("render template", "url", r.URL.Path, "error", err)
 	}
 }
