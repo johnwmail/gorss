@@ -25,8 +25,6 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
 
-# Create non-root user
-RUN adduser -D -u 1000 gorss
 
 # Copy binary from builder
 COPY --from=builder /app/gorss .
@@ -35,26 +33,30 @@ COPY --from=builder /app/gorss .
 COPY --from=builder /app/srv/templates ./srv/templates
 COPY --from=builder /app/srv/static ./srv/static
 
+# Create user with specific UID/GID 8080
+RUN deluser gorss 2>/dev/null || true && \
+    addgroup -g 8080 gorss && \
+    adduser -u 8080 -G gorss -h /app -D gorss
+
 # Create data directory for SQLite and set permissions
-RUN mkdir -p /data && chown -R gorss:gorss /data /app
+RUN mkdir -p /data && chown -R 8080:8080 /data /app
 
 # Switch to non-root user
-USER gorss
+USER 8080:8080
 
 # Environment variables
 ENV GORSS_DB_PATH=/data/gorss.db
-ENV GORSS_LISTEN=:8000
-ENV GORSS_REFRESH_INTERVAL=1h
+ENV GORSS_LISTEN=:8080
 ENV GORSS_PURGE_DAYS=30
 ENV GORSS_AUTH_MODE=none
 # ENV GORSS_PASSWORD=your-secret-password
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run
 CMD ["./gorss"]

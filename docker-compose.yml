@@ -6,19 +6,19 @@ services:
     container_name: gorss
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8080:8080"
     volumes:
       - gorss-data:/data
     environment:
       - GORSS_DB_PATH=/data/gorss.db
-      - GORSS_LISTEN=:8000
+      - GORSS_LISTEN=:8080
       - GORSS_REFRESH_INTERVAL=1h
       - GORSS_PURGE_DAYS=30
       - GORSS_AUTH_MODE=none  # Options: none, password, proxy
       # - GORSS_PASSWORD=your-secret-password  # Required if AUTH_MODE=password
       - TZ=UTC
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 3s
       retries: 3
