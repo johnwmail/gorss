@@ -3,7 +3,7 @@
   'use strict';
 
   // State
-  let currentView = 'all';
+  let currentView = 'fresh';
   let currentFeedId = null;
   let articles = [];
   let feeds = [];
@@ -20,11 +20,11 @@
   document.addEventListener('DOMContentLoaded', init);
 
   async function init() {
-    await loadFeeds();
-    await loadArticles();
-    await updateCounts();
     setupEventListeners();
     setupKeyboardNav();
+    await loadFeeds();
+    await updateCounts();
+    navigateTo(currentView);
   }
 
   function setupEventListeners() {
@@ -166,7 +166,7 @@
     });
 
     // Update title
-    const titles = { all: 'All Articles', fresh: 'Fresh', starred: 'Starred' };
+    const titles = { all: 'All Articles', fresh: 'Unread', starred: 'Starred' };
     let title = titles[view] || 'Articles';
     if (feedId) {
       const feed = feeds.find(f => f.id == feedId);
