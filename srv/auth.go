@@ -24,7 +24,7 @@ const (
 var (
 	sessions     = make(map[string]time.Time)
 	sessionsLock sync.RWMutex
-	sessionTTL   = 7 * 24 * time.Hour // 1 week
+	sessionTTL   = 30 * 24 * time.Hour // 30 days
 )
 
 // GetAuthMode returns the current auth mode from environment
