@@ -198,3 +198,56 @@ func (s *Server) refreshAllFeeds(ctx context.Context) {
 		time.Sleep(time.Second)
 	}
 }
+
+// StartAutoPurge starts a goroutine that periodically purges old read articles
+func (s *Server) StartAutoPurge(ctx context.Context, purgeDays int) {
+	go func() {
+		// Run purge once at startup after a short delay
+		time.Sleep(30 * time.Second)
+		s.purgeOldArticles(purgeDays)
+
+		// Then run daily
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("stopping auto-purge")
+				return
+			case <-ticker.C:
+				s.purgeOldArticles(purgeDays)
+			}
+		}
+	}()
+}
+
+func (s *Server) purgeOldArticles(purgeDays int) {
+	q := dbgen.New(s.DB)
+	ctx := context.Background()
+
+	// Calculate cutoff date
+	cutoff := time.Now().AddDate(0, 0, -purgeDays)
+
+	// Count first
+	count, err := q.CountOldReadArticles(ctx, &cutoff)
+	if err != nil {
+		slog.Error("count old articles", "error", err)
+		return
+	}
+
+	if count == 0 {
+		slog.Debug("no old read articles to purge")
+		return
+	}
+
+	// Purge
+	result, err := q.PurgeOldReadArticles(ctx, &cutoff)
+	if err != nil {
+		slog.Error("purge old articles", "error", err)
+		return
+	}
+
+	deleted, _ := result.RowsAffected()
+	slog.Info("purged old read articles", "count", deleted, "cutoff_days", purgeDays)
+}

@@ -225,3 +225,23 @@ FROM article_states s
 JOIN articles a ON s.article_id = a.id
 JOIN feeds f ON a.feed_id = f.id
 WHERE s.user_id = ? AND s.is_starred = 1;
+
+-- name: PurgeOldReadArticles :execresult
+DELETE FROM articles
+WHERE id IN (
+  SELECT a.id FROM articles a
+  JOIN feeds f ON a.feed_id = f.id
+  JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
+  WHERE s.is_read = 1 
+    AND s.is_starred = 0
+    AND a.published_at < ?
+);
+
+-- name: CountOldReadArticles :one
+SELECT COUNT(*) as count
+FROM articles a
+JOIN feeds f ON a.feed_id = f.id
+JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
+WHERE s.is_read = 1 
+  AND s.is_starred = 0
+  AND a.published_at < ?;

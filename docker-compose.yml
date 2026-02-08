@@ -13,6 +13,9 @@ services:
       - GORSS_DB_PATH=/data/gorss.db
       - GORSS_LISTEN=:8000
       - GORSS_REFRESH_INTERVAL=1h
+      - GORSS_PURGE_DAYS=30
+      - GORSS_AUTH_MODE=none  # Options: none, password, proxy
+      # - GORSS_PASSWORD=your-secret-password  # Required if AUTH_MODE=password
       - TZ=UTC
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,6 +68,11 @@ func (s *Server) Serve(addr string) error {
 
 	mux := http.NewServeMux()
 
+	// Login/logout (before auth middleware)
+	mux.HandleFunc("GET /login", s.HandleLogin)
+	mux.HandleFunc("POST /login", s.HandleLogin)
+	mux.HandleFunc("GET /logout", s.HandleLogout)
+
 	// Main app
 	mux.HandleFunc("GET /{$}", s.HandleRoot)
 	mux.HandleFunc("GET /mobile/", s.HandleMobile)
@@ -109,17 +115,35 @@ func (s *Server) Serve(addr string) error {
 		}
 	}
 
+	// Parse purge days setting (default 30 days, 0 to disable)
+	purgeDays := 30
+	if envPurge := os.Getenv("GORSS_PURGE_DAYS"); envPurge != "" {
+		if parsed, err := strconv.Atoi(envPurge); err == nil {
+			purgeDays = parsed
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	slog.Info("starting background feed refresh", "interval", refreshInterval)
 	s.StartBackgroundRefresh(ctx, refreshInterval)
 
+	// Start auto-purge if enabled
+	if purgeDays > 0 {
+		slog.Info("starting auto-purge for old read articles", "days", purgeDays)
+		s.StartAutoPurge(ctx, purgeDays)
+	}
+
 	// Also do an initial refresh on startup
 	go s.refreshAllFeeds(ctx)
 
-	slog.Info("starting server", "addr", addr)
-	return http.ListenAndServe(addr, mux)
+	// Apply auth middleware
+	authMode := GetAuthMode()
+	slog.Info("starting server", "addr", addr, "auth_mode", authMode)
+
+	handler := s.AuthMiddleware(mux)
+	return http.ListenAndServe(addr, handler)
 }
 
 // isMobile checks if the request is from a mobile device

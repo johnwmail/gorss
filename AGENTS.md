@@ -105,4 +105,13 @@ spec:
 | GORSS_DB_PATH | ./db.sqlite3 | Path to SQLite database |
 | GORSS_LISTEN | :8000 | Listen address |
 | GORSS_REFRESH_INTERVAL | 1h | Feed refresh interval (e.g., 30m, 1h, 2h) |
+| GORSS_PURGE_DAYS | 30 | Auto-purge read articles older than X days (0 to disable) |
+| GORSS_AUTH_MODE | none | Authentication mode: `none`, `password`, or `proxy` |
+| GORSS_PASSWORD | - | Password for `password` auth mode |
 | TZ | UTC | Timezone |
+
+## Authentication Modes
+
+- **none**: No authentication required (default)
+- **password**: Single password protection, good for personal/family use
+- **proxy**: Uses exe.dev proxy headers (X-ExeDev-UserID) for multi-user support

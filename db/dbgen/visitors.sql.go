@@ -7,8 +7,26 @@ package dbgen
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
+
+const countOldReadArticles = `-- name: CountOldReadArticles :one
+SELECT COUNT(*) as count
+FROM articles a
+JOIN feeds f ON a.feed_id = f.id
+JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
+WHERE s.is_read = 1 
+  AND s.is_starred = 0
+  AND a.published_at < ?
+`
+
+func (q *Queries) CountOldReadArticles(ctx context.Context, publishedAt *time.Time) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOldReadArticles, publishedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createCategory = `-- name: CreateCategory :one
 
@@ -803,6 +821,22 @@ type MarkFeedReadParams struct {
 func (q *Queries) MarkFeedRead(ctx context.Context, arg MarkFeedReadParams) error {
 	_, err := q.db.ExecContext(ctx, markFeedRead, arg.UserID, arg.ReadAt, arg.FeedID)
 	return err
+}
+
+const purgeOldReadArticles = `-- name: PurgeOldReadArticles :execresult
+DELETE FROM articles
+WHERE id IN (
+  SELECT a.id FROM articles a
+  JOIN feeds f ON a.feed_id = f.id
+  JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
+  WHERE s.is_read = 1 
+    AND s.is_starred = 0
+    AND a.published_at < ?
+)
+`
+
+func (q *Queries) PurgeOldReadArticles(ctx context.Context, publishedAt *time.Time) (sql.Result, error) {
+	return q.db.ExecContext(ctx, purgeOldReadArticles, publishedAt)
 }
 
 const searchArticles = `-- name: SearchArticles :many
