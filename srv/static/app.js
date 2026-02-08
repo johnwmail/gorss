@@ -231,7 +231,7 @@
     });
   }
 
-  function selectArticle(index) {
+  async function selectArticle(index) {
     if (index < 0 || index >= articles.length) return;
     selectedIndex = index;
 
@@ -247,10 +247,10 @@
     // Mark as read
     const article = articles[index];
     if (article && !article.is_read) {
-      markRead(article.id);
       article.is_read = 1;
       el.classList.remove('unread');
-      updateCounts();
+      await markRead(article.id);
+      await updateCounts();
     }
   }
 
