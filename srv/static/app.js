@@ -262,13 +262,13 @@
   let scrollMarkReadTimeout = null;
   function handleScrollMarkRead() {
     if (scrollMarkReadTimeout) clearTimeout(scrollMarkReadTimeout);
-    scrollMarkReadTimeout = setTimeout(() => {
+    scrollMarkReadTimeout = setTimeout(async () => {
       const articleList = document.getElementById('articles-list');
       if (!articleList) return;
       
       const articleElements = articleList.querySelectorAll('.article.unread');
       const listRect = articleList.getBoundingClientRect();
-      let markedAny = false;
+      const markPromises = [];
       
       articleElements.forEach((el) => {
         const rect = el.getBoundingClientRect();
@@ -277,18 +277,19 @@
           const articleId = parseInt(el.dataset.id);
           const index = parseInt(el.dataset.index);
           if (articleId) {
-            markRead(articleId);
+            markPromises.push(markRead(articleId));
             el.classList.remove('unread');
             // Update local state
             if (articles[index]) {
               articles[index].is_read = 1;
             }
-            markedAny = true;
           }
         }
       });
-      if (markedAny) {
-        updateCounts();
+      
+      if (markPromises.length > 0) {
+        await Promise.all(markPromises);
+        await updateCounts();
       }
     }, 300); // Debounce 300ms
   }
@@ -305,19 +306,19 @@
     await fetch(`/api/articles/${id}/unstar`, { method: 'POST' });
   }
 
-  function toggleStar() {
-    if (selectedIndex >= 0) toggleStarAt(selectedIndex);
+  async function toggleStar() {
+    if (selectedIndex >= 0) await toggleStarAt(selectedIndex);
   }
 
-  function toggleStarAt(index) {
+  async function toggleStarAt(index) {
     const article = articles[index];
     if (!article) return;
 
     if (article.is_starred) {
-      unstarArticle(article.id);
+      await unstarArticle(article.id);
       article.is_starred = 0;
     } else {
-      starArticle(article.id);
+      await starArticle(article.id);
       article.is_starred = 1;
     }
 
@@ -325,25 +326,25 @@
     const star = el.querySelector('.article-star');
     star.classList.toggle('starred', article.is_starred);
     star.textContent = article.is_starred ? '★' : '☆';
-    updateCounts();
+    await updateCounts();
   }
 
-  function toggleRead() {
+  async function toggleRead() {
     if (selectedIndex < 0) return;
     const article = articles[selectedIndex];
     if (!article) return;
 
     const el = articlesList.querySelector(`[data-index="${selectedIndex}"]`);
     if (article.is_read) {
-      markUnread(article.id);
+      await markUnread(article.id);
       article.is_read = 0;
       el.classList.add('unread');
     } else {
-      markRead(article.id);
+      await markRead(article.id);
       article.is_read = 1;
       el.classList.remove('unread');
     }
-    updateCounts();
+    await updateCounts();
   }
 
   async function updateCounts() {
