@@ -1,14 +1,32 @@
-version: '3.8'
 
 services:
   gorss:
     build: .
+    image: gorss:latest
     container_name: gorss
     restart: unless-stopped
+    
+    # Run as non-root user
+    user: "8080:8080"
+    
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    
+    # Network
     ports:
       - "8080:8080"
+    
+    # Volumes - data is writable, tmpfs for temp files
     volumes:
       - gorss-data:/data
+    tmpfs:
+      - /tmp:mode=1777,size=64M,noexec,nosuid
+    
+    # Environment
     environment:
       - GORSS_DB_PATH=/data/gorss.db
       - GORSS_LISTEN=:8080
@@ -17,12 +35,24 @@ services:
       - GORSS_AUTH_MODE=none  # Options: none, password, proxy
       # - GORSS_PASSWORD=your-secret-password  # Required if AUTH_MODE=password
       - TZ=UTC
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+    
+    # Health check
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 3s
       retries: 3
-      start_period: 5s
+      start_period: 10s
 
 volumes:
   gorss-data:
