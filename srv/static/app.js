@@ -19,10 +19,10 @@
   // Initialize
   document.addEventListener('DOMContentLoaded', init);
 
-  function init() {
-    loadFeeds();
-    loadArticles();
-    updateCounts();
+  async function init() {
+    await loadFeeds();
+    await loadArticles();
+    await updateCounts();
     setupEventListeners();
     setupKeyboardNav();
   }

@@ -1,6 +1,5 @@
 # Binary
-gorss
-srv
+/gorss
 
 # Database
 *.sqlite3
