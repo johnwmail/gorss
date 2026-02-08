@@ -179,7 +179,8 @@
     /* Main Content */
     .main {
       padding-top: 56px;
-      min-height: 100vh;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
     }
 
     .article-list {
@@ -515,6 +516,45 @@
           loadArticles();
           updateCounts();
         });
+
+        // Mark as read on scroll (TT-RSS style)
+        let scrollTimeout = null;
+        const mainEl = document.querySelector('.main');
+        mainEl.addEventListener('scroll', () => {
+          if (scrollTimeout) clearTimeout(scrollTimeout);
+          scrollTimeout = setTimeout(() => markScrolledAsRead(), 300);
+        });
+      }
+
+      async function markScrolledAsRead() {
+        const mainEl = document.querySelector('.main');
+        const headerHeight = 56; // header height
+        const articleEls = articlesList.querySelectorAll('.article-card.unread');
+        const toMark = [];
+
+        articleEls.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          // If article is scrolled above the visible area (user has scrolled past it)
+          if (rect.bottom < headerHeight + 20) {
+            const articleId = parseInt(el.dataset.id);
+            if (articleId) {
+              toMark.push({ el, id: articleId });
+            }
+          }
+        });
+
+        // Mark articles as read
+        for (const item of toMark) {
+          item.el.classList.remove('unread');
+          await markRead(item.id);
+          // Update local state
+          const article = articles.find(a => a.id === item.id);
+          if (article) article.is_read = 1;
+        }
+
+        if (toMark.length > 0) {
+          await updateCounts();
+        }
       }
 
       function openDrawer() {
