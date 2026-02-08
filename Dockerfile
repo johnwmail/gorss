@@ -44,6 +44,7 @@ USER gorss
 # Environment variables
 ENV GORSS_DB_PATH=/data/gorss.db
 ENV GORSS_LISTEN=:8000
+ENV GORSS_REFRESH_INTERVAL=1h
 
 # Expose port
 EXPOSE 8000

@@ -104,4 +104,5 @@ spec:
 |----------|---------|-------------|
 | GORSS_DB_PATH | ./db.sqlite3 | Path to SQLite database |
 | GORSS_LISTEN | :8000 | Listen address |
+| GORSS_REFRESH_INTERVAL | 1h | Feed refresh interval (e.g., 30m, 1h, 2h) |
 | TZ | UTC | Timezone |

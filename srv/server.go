@@ -1,6 +1,7 @@
 package srv
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"html/template"
@@ -97,6 +98,25 @@ func (s *Server) Serve(addr string) error {
 	mux.HandleFunc("POST /api/opml/import", s.HandleImportOPML)
 
 	mux.HandleFunc("GET /api/counts", s.HandleGetCounts)
+
+	// Start background feed refresh
+	refreshInterval := 1 * time.Hour // default 1 hour
+	if envInterval := os.Getenv("GORSS_REFRESH_INTERVAL"); envInterval != "" {
+		if parsed, err := time.ParseDuration(envInterval); err == nil {
+			refreshInterval = parsed
+		} else {
+			slog.Warn("invalid GORSS_REFRESH_INTERVAL, using default", "value", envInterval, "error", err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	slog.Info("starting background feed refresh", "interval", refreshInterval)
+	s.StartBackgroundRefresh(ctx, refreshInterval)
+
+	// Also do an initial refresh on startup
+	go s.refreshAllFeeds(ctx)
 
 	slog.Info("starting server", "addr", addr)
 	return http.ListenAndServe(addr, mux)
