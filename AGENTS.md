@@ -46,20 +46,29 @@ gorss/
 ```bash
 go run ./cmd/srv
 # or
-make run
+make build && ./gorss
 ```
 
-Server runs on :8000 by default.
+Server runs on port 8080 by default. Override with `GORSS_PORT=3000`.
 
 ### Docker
 
 ```bash
-# Build and run with docker-compose
-docker-compose up -d
+# Build and run with docker compose
+docker compose up -d
 
 # Or build manually
 docker build -t gorss .
-docker run -d -p 8000:8000 -v gorss-data:/data gorss
+docker run -d -p 8080:8080 -v gorss-data:/data gorss
+```
+
+### systemd Service
+
+```bash
+sudo cp gorss.service /etc/systemd/system/gorss.service
+sudo systemctl daemon-reload
+sudo systemctl enable gorss.service
+sudo systemctl start gorss
 ```
 
 ### Kubernetes
@@ -83,13 +92,15 @@ spec:
       - name: gorss
         image: gorss:latest
         ports:
-        - containerPort: 8000
+        - containerPort: 8080
         volumeMounts:
         - name: data
           mountPath: /data
         env:
         - name: GORSS_DB_PATH
           value: /data/gorss.db
+        - name: GORSS_PORT
+          value: "8080"
       volumes:
       - name: data
         persistentVolumeClaim:

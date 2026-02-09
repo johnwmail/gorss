@@ -76,10 +76,11 @@
 
 - [x] Dockerfile (multi-stage build)
 - [x] docker-compose.yml
-- [ ] Health check endpoint
+- [x] Health check endpoint (`/health`)
 - [ ] Graceful shutdown
-- [ ] Environment variable configuration
-- [ ] Volume mount for SQLite persistence
+- [x] Environment variable configuration (`GORSS_PORT`, `GORSS_DB_PATH`, etc.)
+- [x] Volume mount for SQLite persistence
+- [x] systemd service (`gorss.service`)
 
 ---
 

@@ -1,57 +1,84 @@
-# Go Shelley Template
+# GoRSS - RSS Reader
 
-This is a starter template for building Go web applications on exe.dev. It demonstrates end-to-end usage including HTTP handlers, authentication, database integration, and deployment.
-
-Use this as a foundation to build your own service.
+A self-hosted RSS/Atom feed reader written in Go, inspired by Tiny Tiny RSS.
 
 ## Building and Running
 
-Build with `make build`, then run `./srv`. The server listens on port 8000 by default.
+### Local Development
 
-## Running as a systemd service
+```bash
+# Build and run
+make build
+./gorss
 
-To run the server as a systemd service:
+# Or run directly
+go run ./cmd/srv
+```
+
+Server listens on port 8080 by default. Override with `GORSS_PORT=3000 ./gorss`.
+
+### Docker
+
+```bash
+# Build and run with docker compose
+docker compose up -d
+
+# Or build manually
+docker build -t gorss .
+docker run -d -p 8080:8080 -v gorss-data:/data gorss
+```
+
+### systemd Service
 
 ```bash
 # Install the service file
-sudo cp srv.service /etc/systemd/system/srv.service
+sudo cp gorss.service /etc/systemd/system/gorss.service
 
 # Reload systemd and enable the service
 sudo systemctl daemon-reload
-sudo systemctl enable srv.service
+sudo systemctl enable gorss.service
+sudo systemctl start gorss
 
-# Start the service
-sudo systemctl start srv
-
-# Check status
-systemctl status srv
-
-# View logs
-journalctl -u srv -f
+# Check status / view logs
+systemctl status gorss
+journalctl -u gorss -f
 ```
 
 To restart after code changes:
 
 ```bash
 make build
-sudo systemctl restart srv
+sudo systemctl restart gorss
 ```
 
-## Authorization
+## Environment Variables
 
-exe.dev provides authorization headers and login/logout links
-that this template uses.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| GORSS_DB_PATH | ./db.sqlite3 | Path to SQLite database |
+| GORSS_PORT | 8080 | Port number to listen on |
+| GORSS_REFRESH_INTERVAL | 1h | Feed refresh interval (e.g., 30m, 1h, 2h) |
+| GORSS_PURGE_DAYS | 30 | Auto-purge read articles older than X days (0 to disable) |
+| GORSS_AUTH_MODE | none | Authentication mode: `none`, `password`, or `proxy` |
+| GORSS_PASSWORD | - | Password for `password` auth mode |
+| TZ | UTC | Timezone |
 
-When proxied through exed, requests will include `X-ExeDev-UserID` and
-`X-ExeDev-Email` if the user is authenticated via exe.dev.
+## Authentication Modes
+
+- **none**: No authentication required (default)
+- **password**: Single password protection, good for personal/family use
+- **proxy**: Uses exe.dev proxy headers (X-ExeDev-UserID) for multi-user support
 
 ## Database
 
-This template uses sqlite (`db.sqlite3`). SQL queries are managed with sqlc.
+Uses SQLite (`db.sqlite3`). SQL queries are managed with sqlc.
 
-## Code layout
+## Code Layout
 
-- `cmd/srv`: main package (binary entrypoint)
-- `srv`: HTTP server logic (handlers)
-- `srv/templates`: Go HTML templates
-- `db`: SQLite open + migrations (001-base.sql)
+- `cmd/srv/` — main package (binary entrypoint)
+- `srv/` — HTTP server logic (handlers, feed fetcher, auth)
+- `srv/templates/` — Go HTML templates
+- `srv/static/` — CSS, JS
+- `db/` — SQLite open + migrations
+- `db/queries/` — sqlc query definitions
+- `db/dbgen/` — generated query code
