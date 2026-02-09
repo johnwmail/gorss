@@ -5,8 +5,10 @@
   // State
   let currentView = 'fresh';
   let currentFeedId = null;
+  let currentCategoryId = null;
   let articles = [];
   let feeds = [];
+  let categories = [];
   let selectedIndex = -1;
   let gKeyPressed = false;
 
@@ -16,15 +18,32 @@
   const articlesList = document.getElementById('articles-list');
   const feedsList = document.getElementById('feeds-list');
 
-  // Initialize
-  document.addEventListener('DOMContentLoaded', init);
+  // Initialize - handle both cases: DOM already loaded or still loading
+  console.log('GoRSS script loaded, readyState:', document.readyState);
+  if (document.readyState === 'loading') {
+    console.log('Adding DOMContentLoaded listener');
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    console.log('Calling init immediately');
+    init();
+  }
 
   async function init() {
-    setupEventListeners();
-    setupKeyboardNav();
-    await loadFeeds();
-    await updateCounts();
-    navigateTo(currentView);
+    console.log('GoRSS init starting...');
+    try {
+      setupEventListeners();
+      console.log('Event listeners set up');
+      setupKeyboardNav();
+      console.log('Keyboard nav set up');
+      await loadFeeds();
+      console.log('Feeds loaded');
+      await updateCounts();
+      console.log('Counts updated');
+      navigateTo(currentView);
+      console.log('GoRSS init complete');
+    } catch (e) {
+      console.error('GoRSS init error:', e);
+    }
   }
 
   function setupEventListeners() {
@@ -153,16 +172,20 @@
   }
 
   // Navigation
-  function navigateTo(view, feedId = null) {
+  function navigateTo(view, feedId = null, categoryId = null) {
     currentView = view;
     currentFeedId = feedId;
+    currentCategoryId = categoryId;
     selectedIndex = -1;
 
     // Update active state
     document.querySelectorAll('.nav-item').forEach(el => {
       el.classList.remove('active');
-      if (el.dataset.view === view && !feedId) el.classList.add('active');
+      if (el.dataset.view === view && !feedId && !categoryId) el.classList.add('active');
       if (feedId && el.dataset.feedId == feedId) el.classList.add('active');
+    });
+    document.querySelectorAll('.cat-header').forEach(el => {
+      el.classList.toggle('active', categoryId && el.dataset.catId == categoryId);
     });
 
     // Update title
@@ -172,14 +195,19 @@
       const feed = feeds.find(f => f.id == feedId);
       title = feed ? feed.title : 'Feed';
     }
+    if (categoryId) {
+      const cat = categories.find(c => c.id == categoryId);
+      title = cat ? cat.title : 'Category';
+    }
     document.getElementById('current-view').textContent = title;
 
     loadArticles();
+
+    // Close drawer on mobile
+    if (window.innerWidth <= 768) closeSidebar();
   }
 
   // Load feeds
-  let categories = [];
-
   async function loadFeeds() {
     try {
       const [feedsRes, catsRes] = await Promise.all([
@@ -219,10 +247,10 @@
     const sortedCats = [...catMap.values()].filter(c => c.feeds.length > 0).sort((a, b) => a.title.localeCompare(b.title));
     sortedCats.forEach(cat => {
       html += `
-        <div class="feed-category">
+        <div class="feed-category" draggable="true" data-drag-cat="${cat.id}">
           <div class="category-header" data-cat-id="${cat.id}">
             <span class="category-toggle">▸</span>
-            <span class="category-title">${escapeHtml(cat.title)}</span>
+            <span class="cat-header" data-cat-id="${cat.id}">${escapeHtml(cat.title)}</span>
             <span class="count" data-cat-count="${cat.id}">0</span>
           </div>
           <div class="category-feeds" data-cat-feeds="${cat.id}" style="display:none">
@@ -234,10 +262,10 @@
     // Render uncategorized feeds
     if (uncategorized.length) {
       html += `
-        <div class="feed-category">
+        <div class="feed-category" data-drag-cat="0">
           <div class="category-header" data-cat-id="0">
             <span class="category-toggle">▸</span>
-            <span class="category-title">Uncategorized</span>
+            <span class="cat-header" data-cat-id="0">Uncategorized</span>
             <span class="count" data-cat-count="0">0</span>
           </div>
           <div class="category-feeds" data-cat-feeds="0" style="display:none">
@@ -248,13 +276,13 @@
 
     feedsList.innerHTML = html;
 
-    // Category toggle click handlers
-    feedsList.querySelectorAll('.category-header').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        const catId = el.dataset.catId;
+    // Category toggle (arrow) click
+    feedsList.querySelectorAll('.category-toggle').forEach(toggle => {
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const header = toggle.closest('.category-header');
+        const catId = header.dataset.catId;
         const feedsDiv = feedsList.querySelector(`[data-cat-feeds="${catId}"]`);
-        const toggle = el.querySelector('.category-toggle');
         if (feedsDiv.style.display === 'none') {
           feedsDiv.style.display = 'block';
           toggle.textContent = '▾';
@@ -265,18 +293,31 @@
       });
     });
 
+    // Category title click → show all articles in category
+    feedsList.querySelectorAll('.cat-header').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        const catId = el.dataset.catId;
+        if (catId && catId !== '0') {
+          navigateTo('category', null, parseInt(catId));
+        }
+      });
+    });
+
     // Feed click handlers
     feedsList.querySelectorAll('.nav-item[data-feed-id]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.preventDefault();
         navigateTo('feed', el.dataset.feedId);
-        closeSidebar();
       });
     });
+
+    // Setup drag and drop
+    setupDragDrop();
   }
 
   function feedItemHtml(f) {
-    return `<a href="#" class="nav-item" data-feed-id="${f.id}">
+    return `<a href="#" class="nav-item" data-feed-id="${f.id}" draggable="true" data-drag-feed="${f.id}">
       <span class="icon">📡</span>
       <span class="label">${escapeHtml(f.title || f.url)}</span>
       <span class="count" data-feed-count="${f.id}">0</span>
@@ -290,6 +331,7 @@
     let url = '/api/articles?limit=100';
     if (currentView === 'fresh') url += '&view=unread';
     else if (currentView === 'starred') url += '&view=starred';
+    else if (currentCategoryId) url += `&category_id=${currentCategoryId}`;
     else if (currentFeedId) url += `&feed_id=${currentFeedId}`;
 
     try {
@@ -491,24 +533,45 @@
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
 
-      // Update feed counts and category totals
+      // Update feed counts, hide feeds with 0 unread, and update category totals
       if (data.feeds) {
         const catTotals = new Map();
-        Object.entries(data.feeds).forEach(([id, count]) => {
+
+        // Build a set of feed IDs that have unread articles
+        const unreadFeedIds = new Set(Object.keys(data.feeds).map(String));
+
+        // Update each feed's count badge and visibility
+        feeds.forEach(f => {
+          const id = String(f.id);
+          const count = data.feeds[id] || 0;
           const el = document.querySelector(`[data-feed-count="${id}"]`);
           if (el) el.textContent = count;
-          // Accumulate category totals
-          const feed = feeds.find(f => f.id == id);
-          if (feed) {
-            const catId = feed.category_id || 0;
-            catTotals.set(catId, (catTotals.get(catId) || 0) + count);
+
+          // Show/hide feed based on unread count
+          const feedEl = document.querySelector(`[data-feed-id="${id}"]`);
+          if (feedEl) {
+            feedEl.style.display = count > 0 ? '' : 'none';
           }
+
+          // Accumulate category totals
+          const catId = f.category_id || 0;
+          catTotals.set(catId, (catTotals.get(catId) || 0) + count);
         });
-        // Update category counts
-        catTotals.forEach((total, catId) => {
-          const el = document.querySelector(`[data-cat-count="${catId}"]`);
-          if (el) el.textContent = total;
+
+        // Update category counts and hide categories with 0 unread
+        let anyVisible = false;
+        feedsList.querySelectorAll('.feed-category').forEach(catEl => {
+          const catId = parseInt(catEl.querySelector('.category-header')?.dataset.catId || '0');
+          const total = catTotals.get(catId) || 0;
+          const countEl = document.querySelector(`[data-cat-count="${catId}"]`);
+          if (countEl) countEl.textContent = total;
+          catEl.style.display = total > 0 ? '' : 'none';
+          if (total > 0) anyVisible = true;
         });
+
+        // Hide the "Feeds" section title if no feeds have unread articles
+        const feedsSectionTitle = document.querySelector('.nav-section-title');
+        if (feedsSectionTitle) feedsSectionTitle.style.display = anyVisible ? '' : 'none';
       }
     } catch (e) {
       console.error('Failed to update counts:', e);
@@ -619,6 +682,158 @@
   }
 
   // Utilities
+  // Drag and drop for reordering categories and feeds
+  function setupDragDrop() {
+    let dragItem = null;
+    let dragType = null; // 'category' or 'feed'
+
+    // Category drag
+    feedsList.querySelectorAll('[data-drag-cat]').forEach(el => {
+      el.addEventListener('dragstart', (e) => {
+        dragItem = el;
+        dragType = 'category';
+        el.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', el.dataset.dragCat);
+      });
+
+      el.addEventListener('dragend', () => {
+        el.classList.remove('dragging');
+        feedsList.querySelectorAll('.drag-over').forEach(d => d.classList.remove('drag-over'));
+        dragItem = null;
+        dragType = null;
+      });
+
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (dragType === 'category' && el !== dragItem) {
+          el.classList.add('drag-over');
+        }
+        if (dragType === 'feed') {
+          el.classList.add('drag-over');
+        }
+      });
+
+      el.addEventListener('dragleave', () => {
+        el.classList.remove('drag-over');
+      });
+
+      el.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        el.classList.remove('drag-over');
+
+        if (dragType === 'category' && dragItem !== el) {
+          // Reorder categories
+          const parent = el.parentNode;
+          const items = [...parent.querySelectorAll('[data-drag-cat]')];
+          const dragIdx = items.indexOf(dragItem);
+          const dropIdx = items.indexOf(el);
+          if (dragIdx < dropIdx) {
+            parent.insertBefore(dragItem, el.nextSibling);
+          } else {
+            parent.insertBefore(dragItem, el);
+          }
+          // Save new order
+          const newOrder = [...parent.querySelectorAll('[data-drag-cat]')].map((item, i) => ({
+            id: parseInt(item.dataset.dragCat),
+            order: i
+          })).filter(item => item.id > 0);
+          await fetch('/api/categories/reorder', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newOrder)
+          });
+        }
+
+        if (dragType === 'feed') {
+          // Move feed to this category
+          const feedId = parseInt(dragItem.dataset.dragFeed);
+          const targetCatId = parseInt(el.dataset.dragCat);
+          const feedsDiv = el.querySelector('[data-cat-feeds]');
+          if (feedsDiv && dragItem.parentNode !== feedsDiv) {
+            feedsDiv.appendChild(dragItem);
+            feedsDiv.style.display = 'block';
+            el.querySelector('.category-toggle').textContent = '▾';
+            // Save feed move
+            const feedItems = [...feedsDiv.querySelectorAll('[data-drag-feed]')].map((item, i) => ({
+              id: parseInt(item.dataset.dragFeed),
+              order: i,
+              category_id: targetCatId || null
+            }));
+            await fetch('/api/feeds/reorder', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(feedItems)
+            });
+            await updateCounts();
+          }
+        }
+      });
+    });
+
+    // Feed drag
+    feedsList.querySelectorAll('[data-drag-feed]').forEach(el => {
+      el.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        dragItem = el;
+        dragType = 'feed';
+        el.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', el.dataset.dragFeed);
+      });
+
+      el.addEventListener('dragend', () => {
+        el.classList.remove('dragging');
+        feedsList.querySelectorAll('.drag-over').forEach(d => d.classList.remove('drag-over'));
+        dragItem = null;
+        dragType = null;
+      });
+
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (dragType === 'feed' && el !== dragItem) {
+          el.classList.add('drag-over');
+        }
+      });
+
+      el.addEventListener('dragleave', () => {
+        el.classList.remove('drag-over');
+      });
+
+      el.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        el.classList.remove('drag-over');
+
+        if (dragType === 'feed' && dragItem !== el) {
+          // Reorder within same category
+          const parent = el.parentNode;
+          const items = [...parent.querySelectorAll('[data-drag-feed]')];
+          const dragIdx = items.indexOf(dragItem);
+          const dropIdx = items.indexOf(el);
+          if (dragIdx < dropIdx) {
+            parent.insertBefore(dragItem, el.nextSibling);
+          } else {
+            parent.insertBefore(dragItem, el);
+          }
+          // Save new order
+          const catEl = parent.closest('[data-drag-cat]');
+          const catId = catEl ? parseInt(catEl.dataset.dragCat) : null;
+          const feedItems = [...parent.querySelectorAll('[data-drag-feed]')].map((item, i) => ({
+            id: parseInt(item.dataset.dragFeed),
+            order: i,
+            category_id: catId || null
+          }));
+          await fetch('/api/feeds/reorder', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(feedItems)
+          });
+        }
+      });
+    });
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
