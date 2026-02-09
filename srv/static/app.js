@@ -196,9 +196,16 @@
       const feed = feeds.find(f => f.id == feedId);
       title = feed ? feed.title : 'Feed';
     }
-    if (categoryId) {
-      const cat = categories.find(c => c.id == categoryId);
-      title = cat ? cat.title : 'Category';
+    if (categoryId !== null && categoryId !== undefined) {
+      if (categoryId === 0) {
+        title = 'Uncategorized';
+      } else {
+        const cat = categories.find(c => c.id == categoryId);
+        title = cat ? cat.title : 'Category';
+      }
+      const countEl = document.querySelector(`[data-cat-count="${categoryId}"]`);
+      const count = countEl ? parseInt(countEl.textContent) || 0 : 0;
+      if (count > 0) title += ` (${count})`;
     }
     document.getElementById('current-view').textContent = title;
 
@@ -299,9 +306,7 @@
       el.addEventListener('click', (e) => {
         e.preventDefault();
         const catId = el.dataset.catId;
-        if (catId && catId !== '0') {
-          navigateTo('category', null, parseInt(catId));
-        }
+        navigateTo('category', null, parseInt(catId));
       });
     });
 

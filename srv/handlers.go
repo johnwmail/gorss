@@ -162,9 +162,29 @@ func (s *Server) HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
 
-// getUnreadArticlesByCategory returns unread articles filtered by category
-func getUnreadArticlesByCategory(ctx context.Context, db *sql.DB, userID string, categoryID int64, limit, offset int64) ([]dbgen.GetArticlesRow, error) {
-	const query = `
+// queryArticlesByCategory runs a category-filtered article query.
+// categoryID=0 means uncategorized (NULL category_id).
+// unreadOnly=true filters to unread articles only.
+func queryArticlesByCategory(ctx context.Context, db *sql.DB, userID string, categoryID int64, unreadOnly bool, limit, offset int64) ([]dbgen.GetArticlesRow, error) {
+	var catFilter string
+	var args []any
+
+	if categoryID == 0 {
+		catFilter = "f.category_id IS NULL"
+		args = append(args, userID) // for s.user_id
+		// no category arg
+		args = append(args, userID) // for f.user_id
+	} else {
+		catFilter = "f.category_id = ?"
+		args = append(args, userID, categoryID, userID)
+	}
+
+	unreadFilter := ""
+	if unreadOnly {
+		unreadFilter = " AND (s.is_read IS NULL OR s.is_read = 0)"
+	}
+
+	query := `
 SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, a.published_at, a.created_at,
   f.title as feed_title, f.site_url as feed_site_url,
   COALESCE(s.is_read, 0) as is_read,
@@ -172,11 +192,13 @@ SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, 
 FROM articles a
 JOIN feeds f ON a.feed_id = f.id
 LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = ?
-WHERE f.category_id = ? AND f.user_id = ? AND (s.is_read IS NULL OR s.is_read = 0)
+WHERE ` + catFilter + ` AND f.user_id = ?` + unreadFilter + `
 ORDER BY a.published_at DESC
 LIMIT ? OFFSET ?`
 
-	rows, err := db.QueryContext(ctx, query, userID, categoryID, userID, limit, offset)
+	args = append(args, limit, offset)
+
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +261,7 @@ func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 		}
 	case categoryID != "" && (view == "unread" || view == "fresh"):
 		cid, _ := strconv.ParseInt(categoryID, 10, 64)
-		articles, err = getUnreadArticlesByCategory(r.Context(), s.DB, userID, cid, limit, offset)
+		articles, err = queryArticlesByCategory(r.Context(), s.DB, userID, cid, true, limit, offset)
 	case view == "unread" || view == "fresh":
 		unread, e := q.GetUnreadArticles(r.Context(), dbgen.GetUnreadArticlesParams{
 			UserID:   userID,
@@ -253,17 +275,7 @@ func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 		}
 	case categoryID != "":
 		cid, _ := strconv.ParseInt(categoryID, 10, 64)
-		byCat, e := q.GetArticlesByCategory(r.Context(), dbgen.GetArticlesByCategoryParams{
-			UserID:     userID,
-			CategoryID: &cid,
-			UserID_2:   userID,
-			Limit:      limit,
-			Offset:     offset,
-		})
-		err = e
-		for _, a := range byCat {
-			articles = append(articles, dbgen.GetArticlesRow(a))
-		}
+		articles, err = queryArticlesByCategory(r.Context(), s.DB, userID, cid, false, limit, offset)
 	case feedID != "":
 		fid, _ := strconv.ParseInt(feedID, 10, 64)
 		byFeed, e := q.GetArticlesByFeed(r.Context(), dbgen.GetArticlesByFeedParams{
