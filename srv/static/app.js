@@ -137,7 +137,8 @@
         case 'o':
         case 'Enter':
           if (selectedIndex >= 0 && articles[selectedIndex]) {
-            window.open(articles[selectedIndex].url, '_blank');
+            const link = articlesList.querySelector(`[data-index="${selectedIndex}"] a.article-title`);
+            if (link) link.click();
           }
           break;
         case 's':
@@ -331,7 +332,7 @@
     let url = '/api/articles?limit=100';
     if (currentView === 'fresh') url += '&view=unread';
     else if (currentView === 'starred') url += '&view=starred';
-    else if (currentCategoryId) url += `&category_id=${currentCategoryId}`;
+    else if (currentCategoryId) url += `&category_id=${currentCategoryId}&view=unread`;
     else if (currentFeedId) url += `&feed_id=${currentFeedId}`;
 
     try {
@@ -358,13 +359,13 @@
             ${a.author ? `<span class="article-author">by ${escapeHtml(a.author)}</span>` : ''}
             <span class="article-star${a.is_starred ? ' starred' : ''}" data-star="${a.id}">${a.is_starred ? '★' : '☆'}</span>
           </div>
-          <div class="article-title">${escapeHtml(a.title)}</div>
+          <a class="article-title" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>
         </div>
         <div class="article-content" id="content-${a.id}">${a.content || a.summary || ''}</div>
         <div class="article-actions">
           <button class="article-btn" data-action="star" data-id="${a.id}">${a.is_starred ? '★ Unstar' : '☆ Star'}</button>
           <button class="article-btn" data-action="read" data-id="${a.id}">${a.is_read ? '● Read' : '○ Unread'}</button>
-          <button class="article-btn" data-action="open" data-url="${escapeHtml(a.url)}">↗ Open</button>
+          <a class="article-btn" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">↗ Open</a>
         </div>
       </article>
     `).join('');
@@ -397,7 +398,6 @@
 
         if (action === 'star' && index >= 0) await toggleStarAt(index);
         if (action === 'read' && index >= 0) await toggleReadAt(index);
-        if (action === 'open') window.open(btn.dataset.url, '_blank');
       });
     });
   }

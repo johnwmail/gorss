@@ -1,6 +1,8 @@
 package srv
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -66,10 +68,13 @@ func (s *Server) HandleGetFeeds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := dbgen.New(s.DB)
-	feeds, err := q.GetFeeds(r.Context(), userID)
+	feeds, err := q.GetFeedsOrdered(r.Context(), userID)
 	if err != nil {
 		jsonError(w, "failed to get feeds", http.StatusInternalServerError)
 		return
+	}
+	if feeds == nil {
+		feeds = []dbgen.Feed{}
 	}
 	jsonResponse(w, feeds)
 }
@@ -157,6 +162,44 @@ func (s *Server) HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
 
+// getUnreadArticlesByCategory returns unread articles filtered by category
+func getUnreadArticlesByCategory(ctx context.Context, db *sql.DB, userID string, categoryID int64, limit, offset int64) ([]dbgen.GetArticlesRow, error) {
+	const query = `
+SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, a.published_at, a.created_at,
+  f.title as feed_title, f.site_url as feed_site_url,
+  COALESCE(s.is_read, 0) as is_read,
+  COALESCE(s.is_starred, 0) as is_starred
+FROM articles a
+JOIN feeds f ON a.feed_id = f.id
+LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = ?
+WHERE f.category_id = ? AND f.user_id = ? AND (s.is_read IS NULL OR s.is_read = 0)
+ORDER BY a.published_at DESC
+LIMIT ? OFFSET ?`
+
+	rows, err := db.QueryContext(ctx, query, userID, categoryID, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []dbgen.GetArticlesRow
+	for rows.Next() {
+		var a dbgen.GetArticlesRow
+		if err := rows.Scan(
+			&a.ID, &a.FeedID, &a.Guid, &a.Url, &a.Title, &a.Author,
+			&a.Content, &a.Summary, &a.PublishedAt, &a.CreatedAt,
+			&a.FeedTitle, &a.FeedSiteUrl, &a.IsRead, &a.IsStarred,
+		); err != nil {
+			return nil, err
+		}
+		articles = append(articles, a)
+	}
+	if articles == nil {
+		articles = []dbgen.GetArticlesRow{}
+	}
+	return articles, rows.Err()
+}
+
 // HandleGetArticles returns articles with optional filters
 func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 	userID, _ := s.ensureUser(r)
@@ -177,6 +220,7 @@ func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 
 	view := r.URL.Query().Get("view")
 	feedID := r.URL.Query().Get("feed_id")
+	categoryID := r.URL.Query().Get("category_id")
 
 	var articles []dbgen.GetArticlesRow
 	var err error
@@ -193,6 +237,9 @@ func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 		for _, a := range starred {
 			articles = append(articles, dbgen.GetArticlesRow(a))
 		}
+	case categoryID != "" && (view == "unread" || view == "fresh"):
+		cid, _ := strconv.ParseInt(categoryID, 10, 64)
+		articles, err = getUnreadArticlesByCategory(r.Context(), s.DB, userID, cid, limit, offset)
 	case view == "unread" || view == "fresh":
 		unread, e := q.GetUnreadArticles(r.Context(), dbgen.GetUnreadArticlesParams{
 			UserID:   userID,
@@ -202,6 +249,19 @@ func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 		})
 		err = e
 		for _, a := range unread {
+			articles = append(articles, dbgen.GetArticlesRow(a))
+		}
+	case categoryID != "":
+		cid, _ := strconv.ParseInt(categoryID, 10, 64)
+		byCat, e := q.GetArticlesByCategory(r.Context(), dbgen.GetArticlesByCategoryParams{
+			UserID:     userID,
+			CategoryID: &cid,
+			UserID_2:   userID,
+			Limit:      limit,
+			Offset:     offset,
+		})
+		err = e
+		for _, a := range byCat {
 			articles = append(articles, dbgen.GetArticlesRow(a))
 		}
 	case feedID != "":
@@ -322,6 +382,40 @@ func (s *Server) HandleUnstar(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
 
+// HandleMarkAllRead marks all articles as read (optionally filtered by feed)
+func (s *Server) HandleMarkAllRead(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	q := dbgen.New(s.DB)
+	now := time.Now()
+
+	// Check if filtering by feed
+	if feedIDStr := r.URL.Query().Get("feed_id"); feedIDStr != "" {
+		feedID, err := strconv.ParseInt(feedIDStr, 10, 64)
+		if err != nil {
+			jsonError(w, "invalid feed_id", http.StatusBadRequest)
+			return
+		}
+		if err := q.MarkFeedRead(r.Context(), dbgen.MarkFeedReadParams{
+			UserID: userID,
+			ReadAt: &now,
+			FeedID: feedID,
+		}); err != nil {
+			jsonError(w, "failed to mark feed read", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := q.MarkAllRead(r.Context(), dbgen.MarkAllReadParams{
+			UserID:   userID,
+			ReadAt:   &now,
+			UserID_2: userID,
+		}); err != nil {
+			jsonError(w, "failed to mark all read", http.StatusInternalServerError)
+			return
+		}
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
 // HandleMarkFeedRead marks all articles in a feed as read
 func (s *Server) HandleMarkFeedRead(w http.ResponseWriter, r *http.Request) {
 	userID, _ := s.ensureUser(r)
@@ -355,7 +449,7 @@ func (s *Server) HandleGetCategories(w http.ResponseWriter, r *http.Request) {
 	userID, _ := s.ensureUser(r)
 	q := dbgen.New(s.DB)
 
-	categories, err := q.GetCategories(r.Context(), userID)
+	categories, err := q.GetCategoriesOrdered(r.Context(), userID)
 	if err != nil {
 		jsonError(w, "failed to get categories", http.StatusInternalServerError)
 		return
@@ -589,4 +683,64 @@ func (s *Server) HandleImportOPML(w http.ResponseWriter, r *http.Request) {
 		"skipped":  skipped,
 		"total":    len(feeds),
 	})
+}
+
+// HandleReorderCategories updates category sort orders
+func (s *Server) HandleReorderCategories(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	q := dbgen.New(s.DB)
+
+	var req []struct {
+		ID    int64 `json:"id"`
+		Order int64 `json:"order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	for _, item := range req {
+		q.UpdateCategorySortOrder(r.Context(), dbgen.UpdateCategorySortOrderParams{
+			SortOrder: item.Order,
+			ID:        item.ID,
+			UserID:    userID,
+		})
+	}
+
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// HandleReorderFeeds updates feed sort orders and optionally moves feeds between categories
+func (s *Server) HandleReorderFeeds(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	q := dbgen.New(s.DB)
+
+	var req []struct {
+		ID         int64  `json:"id"`
+		Order      int64  `json:"order"`
+		CategoryID *int64 `json:"category_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	for _, item := range req {
+		if item.CategoryID != nil {
+			q.UpdateFeedCategory(r.Context(), dbgen.UpdateFeedCategoryParams{
+				CategoryID: item.CategoryID,
+				SortOrder:  item.Order,
+				ID:         item.ID,
+				UserID:     userID,
+			})
+		} else {
+			q.UpdateFeedSortOrder(r.Context(), dbgen.UpdateFeedSortOrderParams{
+				SortOrder: item.Order,
+				ID:        item.ID,
+				UserID:    userID,
+			})
+		}
+	}
+
+	jsonResponse(w, map[string]string{"status": "ok"})
 }
