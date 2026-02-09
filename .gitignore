@@ -1,5 +1,6 @@
 # Binary
-/gorss
+gorss
+gorss-server
 
 # Database
 *.sqlite3

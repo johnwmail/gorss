@@ -35,6 +35,7 @@ type Category struct {
 	UserID    string    `json:"user_id"`
 	Title     string    `json:"title"`
 	CreatedAt time.Time `json:"created_at"`
+	SortOrder int64     `json:"sort_order"`
 }
 
 type Feed struct {
@@ -48,6 +49,7 @@ type Feed struct {
 	LastUpdated *time.Time `json:"last_updated"`
 	LastError   *string    `json:"last_error"`
 	CreatedAt   time.Time  `json:"created_at"`
+	SortOrder   int64      `json:"sort_order"`
 }
 
 type Migration struct {

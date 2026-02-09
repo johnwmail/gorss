@@ -113,6 +113,17 @@ WHERE f.id = ? AND f.user_id = ?
 ORDER BY a.published_at DESC
 LIMIT ? OFFSET ?;
 
+-- name: GetArticlesByCategory :many
+SELECT a.*, f.title as feed_title, f.site_url as feed_site_url,
+  COALESCE(s.is_read, 0) as is_read,
+  COALESCE(s.is_starred, 0) as is_starred
+FROM articles a
+JOIN feeds f ON a.feed_id = f.id
+LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = ?
+WHERE f.category_id = ? AND f.user_id = ?
+ORDER BY a.published_at DESC
+LIMIT ? OFFSET ?;
+
 -- name: GetUnreadArticles :many
 SELECT a.*, f.title as feed_title, f.site_url as feed_site_url,
   COALESCE(s.is_read, 0) as is_read,
@@ -245,3 +256,18 @@ JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
 WHERE s.is_read = 1 
   AND s.is_starred = 0
   AND a.published_at < ?;
+
+-- name: UpdateCategorySortOrder :exec
+UPDATE categories SET sort_order = ? WHERE id = ? AND user_id = ?;
+
+-- name: UpdateFeedSortOrder :exec
+UPDATE feeds SET sort_order = ? WHERE id = ? AND user_id = ?;
+
+-- name: UpdateFeedCategory :exec
+UPDATE feeds SET category_id = ?, sort_order = ? WHERE id = ? AND user_id = ?;
+
+-- name: GetCategoriesOrdered :many
+SELECT * FROM categories WHERE user_id = ? ORDER BY sort_order ASC, title ASC;
+
+-- name: GetFeedsOrdered :many
+SELECT * FROM feeds WHERE user_id = ? ORDER BY sort_order ASC, title ASC;

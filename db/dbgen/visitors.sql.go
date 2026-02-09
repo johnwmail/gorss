@@ -30,7 +30,7 @@ func (q *Queries) CountOldReadArticles(ctx context.Context, publishedAt *time.Ti
 
 const createCategory = `-- name: CreateCategory :one
 
-INSERT INTO categories (user_id, title) VALUES (?, ?) RETURNING id, user_id, title, created_at
+INSERT INTO categories (user_id, title) VALUES (?, ?) RETURNING id, user_id, title, created_at, sort_order
 `
 
 type CreateCategoryParams struct {
@@ -47,6 +47,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.UserID,
 		&i.Title,
 		&i.CreatedAt,
+		&i.SortOrder,
 	)
 	return i, err
 }
@@ -54,7 +55,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 const createFeed = `-- name: CreateFeed :one
 
 INSERT INTO feeds (user_id, category_id, url, title, site_url, description)
-VALUES (?, ?, ?, ?, ?, ?) RETURNING id, user_id, category_id, url, title, site_url, description, last_updated, last_error, created_at
+VALUES (?, ?, ?, ?, ?, ?) RETURNING id, user_id, category_id, url, title, site_url, description, last_updated, last_error, created_at, sort_order
 `
 
 type CreateFeedParams struct {
@@ -88,6 +89,7 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		&i.LastUpdated,
 		&i.LastError,
 		&i.CreatedAt,
+		&i.SortOrder,
 	)
 	return i, err
 }
@@ -121,7 +123,7 @@ func (q *Queries) DeleteFeed(ctx context.Context, arg DeleteFeedParams) error {
 }
 
 const getAllFeedsForRefresh = `-- name: GetAllFeedsForRefresh :many
-SELECT id, user_id, category_id, url, title, site_url, description, last_updated, last_error, created_at FROM feeds ORDER BY last_updated ASC NULLS FIRST LIMIT ?
+SELECT id, user_id, category_id, url, title, site_url, description, last_updated, last_error, created_at, sort_order FROM feeds ORDER BY last_updated ASC NULLS FIRST LIMIT ?
 `
 
 func (q *Queries) GetAllFeedsForRefresh(ctx context.Context, limit int64) ([]Feed, error) {
@@ -144,6 +146,7 @@ func (q *Queries) GetAllFeedsForRefresh(ctx context.Context, limit int64) ([]Fee
 			&i.LastUpdated,
 			&i.LastError,
 			&i.CreatedAt,
+			&i.SortOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -292,6 +295,87 @@ func (q *Queries) GetArticles(ctx context.Context, arg GetArticlesParams) ([]Get
 	return items, nil
 }
 
+const getArticlesByCategory = `-- name: GetArticlesByCategory :many
+SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, a.published_at, a.created_at, f.title as feed_title, f.site_url as feed_site_url,
+  COALESCE(s.is_read, 0) as is_read,
+  COALESCE(s.is_starred, 0) as is_starred
+FROM articles a
+JOIN feeds f ON a.feed_id = f.id
+LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = ?
+WHERE f.category_id = ? AND f.user_id = ?
+ORDER BY a.published_at DESC
+LIMIT ? OFFSET ?
+`
+
+type GetArticlesByCategoryParams struct {
+	UserID     string `json:"user_id"`
+	CategoryID *int64 `json:"category_id"`
+	UserID_2   string `json:"user_id_2"`
+	Limit      int64  `json:"limit"`
+	Offset     int64  `json:"offset"`
+}
+
+type GetArticlesByCategoryRow struct {
+	ID          int64      `json:"id"`
+	FeedID      int64      `json:"feed_id"`
+	Guid        string     `json:"guid"`
+	Url         string     `json:"url"`
+	Title       string     `json:"title"`
+	Author      string     `json:"author"`
+	Content     string     `json:"content"`
+	Summary     string     `json:"summary"`
+	PublishedAt *time.Time `json:"published_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	FeedTitle   string     `json:"feed_title"`
+	FeedSiteUrl string     `json:"feed_site_url"`
+	IsRead      int64      `json:"is_read"`
+	IsStarred   int64      `json:"is_starred"`
+}
+
+func (q *Queries) GetArticlesByCategory(ctx context.Context, arg GetArticlesByCategoryParams) ([]GetArticlesByCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, getArticlesByCategory,
+		arg.UserID,
+		arg.CategoryID,
+		arg.UserID_2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetArticlesByCategoryRow{}
+	for rows.Next() {
+		var i GetArticlesByCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FeedID,
+			&i.Guid,
+			&i.Url,
+			&i.Title,
+			&i.Author,
+			&i.Content,
+			&i.Summary,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.FeedTitle,
+			&i.FeedSiteUrl,
+			&i.IsRead,
+			&i.IsStarred,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getArticlesByFeed = `-- name: GetArticlesByFeed :many
 SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, a.published_at, a.created_at, f.title as feed_title, f.site_url as feed_site_url,
   COALESCE(s.is_read, 0) as is_read,
@@ -374,7 +458,7 @@ func (q *Queries) GetArticlesByFeed(ctx context.Context, arg GetArticlesByFeedPa
 }
 
 const getCategories = `-- name: GetCategories :many
-SELECT id, user_id, title, created_at FROM categories WHERE user_id = ? ORDER BY title
+SELECT id, user_id, title, created_at, sort_order FROM categories WHERE user_id = ? ORDER BY title
 `
 
 func (q *Queries) GetCategories(ctx context.Context, userID string) ([]Category, error) {
@@ -391,6 +475,40 @@ func (q *Queries) GetCategories(ctx context.Context, userID string) ([]Category,
 			&i.UserID,
 			&i.Title,
 			&i.CreatedAt,
+			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCategoriesOrdered = `-- name: GetCategoriesOrdered :many
+SELECT id, user_id, title, created_at, sort_order FROM categories WHERE user_id = ? ORDER BY sort_order ASC, title ASC
+`
+
+func (q *Queries) GetCategoriesOrdered(ctx context.Context, userID string) ([]Category, error) {
+	rows, err := q.db.QueryContext(ctx, getCategoriesOrdered, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Category{}
+	for rows.Next() {
+		var i Category
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.CreatedAt,
+			&i.SortOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -406,7 +524,7 @@ func (q *Queries) GetCategories(ctx context.Context, userID string) ([]Category,
 }
 
 const getCategory = `-- name: GetCategory :one
-SELECT id, user_id, title, created_at FROM categories WHERE id = ? AND user_id = ?
+SELECT id, user_id, title, created_at, sort_order FROM categories WHERE id = ? AND user_id = ?
 `
 
 type GetCategoryParams struct {
@@ -422,12 +540,13 @@ func (q *Queries) GetCategory(ctx context.Context, arg GetCategoryParams) (Categ
 		&i.UserID,
 		&i.Title,
 		&i.CreatedAt,
+		&i.SortOrder,
 	)
 	return i, err
 }
 
 const getFeed = `-- name: GetFeed :one
-SELECT f.id, f.user_id, f.category_id, f.url, f.title, f.site_url, f.description, f.last_updated, f.last_error, f.created_at, c.title as category_title
+SELECT f.id, f.user_id, f.category_id, f.url, f.title, f.site_url, f.description, f.last_updated, f.last_error, f.created_at, f.sort_order, c.title as category_title
 FROM feeds f
 LEFT JOIN categories c ON f.category_id = c.id
 WHERE f.id = ? AND f.user_id = ?
@@ -449,6 +568,7 @@ type GetFeedRow struct {
 	LastUpdated   *time.Time `json:"last_updated"`
 	LastError     *string    `json:"last_error"`
 	CreatedAt     time.Time  `json:"created_at"`
+	SortOrder     int64      `json:"sort_order"`
 	CategoryTitle *string    `json:"category_title"`
 }
 
@@ -466,13 +586,14 @@ func (q *Queries) GetFeed(ctx context.Context, arg GetFeedParams) (GetFeedRow, e
 		&i.LastUpdated,
 		&i.LastError,
 		&i.CreatedAt,
+		&i.SortOrder,
 		&i.CategoryTitle,
 	)
 	return i, err
 }
 
 const getFeedByURL = `-- name: GetFeedByURL :one
-SELECT id, user_id, category_id, url, title, site_url, description, last_updated, last_error, created_at FROM feeds WHERE user_id = ? AND url = ?
+SELECT id, user_id, category_id, url, title, site_url, description, last_updated, last_error, created_at, sort_order FROM feeds WHERE user_id = ? AND url = ?
 `
 
 type GetFeedByURLParams struct {
@@ -494,12 +615,13 @@ func (q *Queries) GetFeedByURL(ctx context.Context, arg GetFeedByURLParams) (Fee
 		&i.LastUpdated,
 		&i.LastError,
 		&i.CreatedAt,
+		&i.SortOrder,
 	)
 	return i, err
 }
 
 const getFeeds = `-- name: GetFeeds :many
-SELECT f.id, f.user_id, f.category_id, f.url, f.title, f.site_url, f.description, f.last_updated, f.last_error, f.created_at, c.title as category_title,
+SELECT f.id, f.user_id, f.category_id, f.url, f.title, f.site_url, f.description, f.last_updated, f.last_error, f.created_at, f.sort_order, c.title as category_title,
   (SELECT COUNT(*) FROM articles a 
    LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
    WHERE a.feed_id = f.id AND (s.is_read IS NULL OR s.is_read = 0)) as unread_count
@@ -520,6 +642,7 @@ type GetFeedsRow struct {
 	LastUpdated   *time.Time `json:"last_updated"`
 	LastError     *string    `json:"last_error"`
 	CreatedAt     time.Time  `json:"created_at"`
+	SortOrder     int64      `json:"sort_order"`
 	CategoryTitle *string    `json:"category_title"`
 	UnreadCount   int64      `json:"unread_count"`
 }
@@ -544,8 +667,48 @@ func (q *Queries) GetFeeds(ctx context.Context, userID string) ([]GetFeedsRow, e
 			&i.LastUpdated,
 			&i.LastError,
 			&i.CreatedAt,
+			&i.SortOrder,
 			&i.CategoryTitle,
 			&i.UnreadCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFeedsOrdered = `-- name: GetFeedsOrdered :many
+SELECT id, user_id, category_id, url, title, site_url, description, last_updated, last_error, created_at, sort_order FROM feeds WHERE user_id = ? ORDER BY sort_order ASC, title ASC
+`
+
+func (q *Queries) GetFeedsOrdered(ctx context.Context, userID string) ([]Feed, error) {
+	rows, err := q.db.QueryContext(ctx, getFeedsOrdered, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Feed{}
+	for rows.Next() {
+		var i Feed
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CategoryID,
+			&i.Url,
+			&i.Title,
+			&i.SiteUrl,
+			&i.Description,
+			&i.LastUpdated,
+			&i.LastError,
+			&i.CreatedAt,
+			&i.SortOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -1015,6 +1178,21 @@ func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) 
 	return err
 }
 
+const updateCategorySortOrder = `-- name: UpdateCategorySortOrder :exec
+UPDATE categories SET sort_order = ? WHERE id = ? AND user_id = ?
+`
+
+type UpdateCategorySortOrderParams struct {
+	SortOrder int64  `json:"sort_order"`
+	ID        int64  `json:"id"`
+	UserID    string `json:"user_id"`
+}
+
+func (q *Queries) UpdateCategorySortOrder(ctx context.Context, arg UpdateCategorySortOrderParams) error {
+	_, err := q.db.ExecContext(ctx, updateCategorySortOrder, arg.SortOrder, arg.ID, arg.UserID)
+	return err
+}
+
 const updateFeed = `-- name: UpdateFeed :exec
 UPDATE feeds SET
   category_id = ?,
@@ -1049,6 +1227,27 @@ func (q *Queries) UpdateFeed(ctx context.Context, arg UpdateFeedParams) error {
 	return err
 }
 
+const updateFeedCategory = `-- name: UpdateFeedCategory :exec
+UPDATE feeds SET category_id = ?, sort_order = ? WHERE id = ? AND user_id = ?
+`
+
+type UpdateFeedCategoryParams struct {
+	CategoryID *int64 `json:"category_id"`
+	SortOrder  int64  `json:"sort_order"`
+	ID         int64  `json:"id"`
+	UserID     string `json:"user_id"`
+}
+
+func (q *Queries) UpdateFeedCategory(ctx context.Context, arg UpdateFeedCategoryParams) error {
+	_, err := q.db.ExecContext(ctx, updateFeedCategory,
+		arg.CategoryID,
+		arg.SortOrder,
+		arg.ID,
+		arg.UserID,
+	)
+	return err
+}
+
 const updateFeedMeta = `-- name: UpdateFeedMeta :exec
 UPDATE feeds SET
   title = ?,
@@ -1077,6 +1276,21 @@ func (q *Queries) UpdateFeedMeta(ctx context.Context, arg UpdateFeedMetaParams) 
 		arg.LastError,
 		arg.ID,
 	)
+	return err
+}
+
+const updateFeedSortOrder = `-- name: UpdateFeedSortOrder :exec
+UPDATE feeds SET sort_order = ? WHERE id = ? AND user_id = ?
+`
+
+type UpdateFeedSortOrderParams struct {
+	SortOrder int64  `json:"sort_order"`
+	ID        int64  `json:"id"`
+	UserID    string `json:"user_id"`
+}
+
+func (q *Queries) UpdateFeedSortOrder(ctx context.Context, arg UpdateFeedSortOrderParams) error {
+	_, err := q.db.ExecContext(ctx, updateFeedSortOrder, arg.SortOrder, arg.ID, arg.UserID)
 	return err
 }
 
