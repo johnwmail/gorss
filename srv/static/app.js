@@ -137,7 +137,7 @@
         case 'o':
         case 'Enter':
           if (selectedIndex >= 0 && articles[selectedIndex]) {
-            const link = articlesList.querySelector(`[data-index="${selectedIndex}"] a.article-title`);
+            const link = articlesList.querySelector(`[data-index="${selectedIndex}"] a.article-btn`);
             if (link) link.click();
           }
           break;
@@ -173,6 +173,34 @@
   }
 
   // Navigation
+  function updateViewTitle() {
+    const titles = { all: 'All Articles', fresh: 'Unread', starred: 'Starred' };
+    let title = titles[currentView] || 'Articles';
+    if (currentFeedId) {
+      const feed = feeds.find(f => f.id == currentFeedId);
+      title = feed ? feed.title : 'Feed';
+    }
+    if (currentCategoryId !== null && currentCategoryId !== undefined) {
+      if (currentCategoryId === 0) {
+        title = 'Uncategorized';
+      } else {
+        const cat = categories.find(c => c.id == currentCategoryId);
+        title = cat ? cat.title : 'Category';
+      }
+      const countEl = document.querySelector(`[data-cat-count="${currentCategoryId}"]`);
+      const count = countEl ? parseInt(countEl.textContent) || 0 : 0;
+      if (count > 0) title += ` (${count})`;
+    }
+    // Append count for top-level views
+    const countIds = { all: 'count-all', fresh: 'count-fresh', starred: 'count-starred' };
+    if (!currentFeedId && currentCategoryId === null && countIds[currentView]) {
+      const el = document.getElementById(countIds[currentView]);
+      const count = el ? parseInt(el.textContent) || 0 : 0;
+      if (count > 0) title += ` (${count})`;
+    }
+    document.getElementById('current-view').textContent = title;
+  }
+
   function navigateTo(view, feedId = null, categoryId = null) {
     currentView = view;
     currentFeedId = feedId;
@@ -190,24 +218,7 @@
     });
 
     // Update title
-    const titles = { all: 'All Articles', fresh: 'Unread', starred: 'Starred' };
-    let title = titles[view] || 'Articles';
-    if (feedId) {
-      const feed = feeds.find(f => f.id == feedId);
-      title = feed ? feed.title : 'Feed';
-    }
-    if (categoryId !== null && categoryId !== undefined) {
-      if (categoryId === 0) {
-        title = 'Uncategorized';
-      } else {
-        const cat = categories.find(c => c.id == categoryId);
-        title = cat ? cat.title : 'Category';
-      }
-      const countEl = document.querySelector(`[data-cat-count="${categoryId}"]`);
-      const count = countEl ? parseInt(countEl.textContent) || 0 : 0;
-      if (count > 0) title += ` (${count})`;
-    }
-    document.getElementById('current-view').textContent = title;
+    updateViewTitle();
 
     loadArticles();
 
@@ -366,7 +377,7 @@
             ${a.author ? `<span class="article-author">by ${escapeHtml(a.author)}</span>` : ''}
             <span class="article-star${a.is_starred ? ' starred' : ''}" data-star="${a.id}">${a.is_starred ? '★' : '☆'}</span>
           </div>
-          <a class="article-title" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>
+          <div class="article-title">${escapeHtml(a.title)}</div>
         </div>
         <div class="article-content" id="content-${a.id}"></div>
         <div class="article-actions">
@@ -383,6 +394,11 @@
       if (contentEl && (a.content || a.summary)) {
         const doc = new DOMParser().parseFromString(a.content || a.summary, 'text/html');
         contentEl.innerHTML = doc.body.innerHTML;
+        // Force all links in article content to open in new tab
+        contentEl.querySelectorAll('a').forEach(link => {
+          link.setAttribute('target', '_blank');
+          link.setAttribute('rel', 'noopener noreferrer');
+        });
       }
     });
 
@@ -548,6 +564,9 @@
       document.getElementById('count-all').textContent = data.total || 0;
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
+
+      // Refresh the header title with updated counts
+      updateViewTitle();
 
       // Update feed counts, hide feeds with 0 unread, and update category totals
       if (data.feeds) {

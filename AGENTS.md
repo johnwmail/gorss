@@ -25,18 +25,31 @@ GoRSS is a web-based RSS/Atom feed reader that replicates the core functionality
 
 ```
 gorss/
-├── cmd/srv/main.go      # Entry point
+├── cmd/srv/
+│   └── main.go              # Entry point
 ├── srv/
-│   ├── server.go        # HTTP server & routes
-│   ├── handlers.go      # Request handlers
-│   ├── feed.go          # Feed fetching logic
-│   ├── templates/       # HTML templates
-│   └── static/          # CSS, JS
+│   ├── server.go            # HTTP server, routes, middleware
+│   ├── handlers.go          # API request handlers
+│   ├── feed.go              # RSS/Atom feed fetching & parsing
+│   ├── auth.go              # Authentication (password/proxy modes)
+│   ├── opml.go              # OPML import/export
+│   ├── server_test.go       # Tests
+│   ├── static/
+│   │   ├── app.css          # Stylesheet
+│   │   └── app.js           # Frontend JavaScript
+│   └── templates/
+│       ├── app.html         # Main app template
+│       └── welcome.html     # Login page template
 ├── db/
-│   ├── migrations/      # SQL migrations
-│   ├── queries/         # sqlc queries
-│   └── dbgen/           # Generated code
-└── PLAN.md              # Implementation plan
+│   ├── db.go               # Database open & migration runner
+│   ├── migrations/          # SQL schema migrations
+│   ├── queries/             # sqlc query definitions
+│   ├── dbgen/               # sqlc generated code
+│   └── sqlc.yaml            # sqlc config
+├── Dockerfile               # Multi-stage Docker build
+├── docker-compose.yml
+├── gorss.service             # systemd unit file
+└── Makefile
 ```
 
 ## Running

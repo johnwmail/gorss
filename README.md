@@ -75,10 +75,36 @@ Uses SQLite (`db.sqlite3`). SQL queries are managed with sqlc.
 
 ## Code Layout
 
-- `cmd/srv/` — main package (binary entrypoint)
-- `srv/` — HTTP server logic (handlers, feed fetcher, auth)
-- `srv/templates/` — Go HTML templates
-- `srv/static/` — CSS, JS
-- `db/` — SQLite open + migrations
-- `db/queries/` — sqlc query definitions
-- `db/dbgen/` — generated query code
+```
+gorss/
+├── cmd/srv/
+│   └── main.go              # Entry point
+├── srv/
+│   ├── server.go            # HTTP server, routes, middleware
+│   ├── handlers.go          # API request handlers
+│   ├── feed.go              # RSS/Atom feed fetching & parsing
+│   ├── auth.go              # Authentication (password/proxy modes)
+│   ├── opml.go              # OPML import/export
+│   ├── server_test.go       # Tests
+│   ├── static/
+│   │   ├── app.css          # Stylesheet
+│   │   └── app.js           # Frontend JavaScript
+│   └── templates/
+│       ├── app.html         # Main app template
+│       └── welcome.html     # Login page template
+├── db/
+│   ├── db.go               # Database open & migration runner
+│   ├── migrations/
+│   │   ├── 001-base.sql     # Initial schema
+│   │   └── 002-sort-order.sql
+│   ├── queries/
+│   │   └── visitors.sql     # sqlc query definitions
+│   ├── dbgen/               # sqlc generated code
+│   └── sqlc.yaml            # sqlc config
+├── Dockerfile               # Multi-stage Docker build
+├── docker-compose.yml
+├── gorss.service             # systemd unit file
+├── Makefile
+├── go.mod
+└── go.sum
+```
