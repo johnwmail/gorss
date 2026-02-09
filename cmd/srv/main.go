@@ -8,7 +8,7 @@ import (
 	"srv.exe.dev/srv"
 )
 
-var flagListenAddr = flag.String("listen", ":8000", "address to listen on")
+var flagPort = flag.String("port", "8080", "port to listen on")
 
 func main() {
 	if err := run(); err != nil {
@@ -26,5 +26,5 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create server: %w", err)
 	}
-	return server.Serve(*flagListenAddr)
+	return server.Serve(*flagPort)
 }

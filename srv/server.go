@@ -60,11 +60,12 @@ func (s *Server) setUpDatabase(dbPath string) error {
 }
 
 // Serve starts the HTTP server with the configured routes
-func (s *Server) Serve(addr string) error {
+func (s *Server) Serve(port string) error {
 	// Support env var override
-	if envAddr := os.Getenv("GORSS_LISTEN"); envAddr != "" {
-		addr = envAddr
+	if envPort := os.Getenv("GORSS_PORT"); envPort != "" {
+		port = envPort
 	}
+	addr := ":" + port
 
 	mux := http.NewServeMux()
 
@@ -100,9 +101,14 @@ func (s *Server) Serve(addr string) error {
 
 	mux.HandleFunc("POST /api/feeds/{id}/mark-read", s.HandleMarkFeedRead)
 	mux.HandleFunc("POST /api/refresh", s.HandleRefresh)
+	mux.HandleFunc("POST /api/feeds/refresh", s.HandleRefresh) // Alias for JS client
+
+	mux.HandleFunc("POST /api/articles/mark-all-read", s.HandleMarkAllRead)
 
 	mux.HandleFunc("GET /api/categories", s.HandleGetCategories)
 	mux.HandleFunc("POST /api/categories", s.HandleCreateCategory)
+	mux.HandleFunc("PUT /api/categories/reorder", s.HandleReorderCategories)
+	mux.HandleFunc("PUT /api/feeds/reorder", s.HandleReorderFeeds)
 
 	// OPML import/export
 	mux.HandleFunc("GET /api/opml/export", s.HandleExportOPML)
