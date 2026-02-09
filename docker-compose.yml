@@ -18,7 +18,7 @@ services:
     
     # Network
     ports:
-      - "8080:8080"
+      - "8000:8080"
     
     # Volumes - data is writable, tmpfs for temp files
     volumes:
@@ -32,8 +32,8 @@ services:
       - GORSS_LISTEN=:8080
       - GORSS_REFRESH_INTERVAL=1h
       - GORSS_PURGE_DAYS=30
-      - GORSS_AUTH_MODE=none  # Options: none, password, proxy
-      # - GORSS_PASSWORD=your-secret-password  # Required if AUTH_MODE=password
+      - GORSS_AUTH_MODE=password    # Options: none, password, proxy
+      - GORSS_PASSWORD=gorss        # Required if AUTH_MODE=password
       - TZ=UTC
     
     # Health check
