@@ -178,10 +178,16 @@
   }
 
   // Load feeds
+  let categories = [];
+
   async function loadFeeds() {
     try {
-      const res = await fetch('/api/feeds');
-      feeds = await res.json();
+      const [feedsRes, catsRes] = await Promise.all([
+        fetch('/api/feeds'),
+        fetch('/api/categories')
+      ]);
+      feeds = await feedsRes.json();
+      categories = await catsRes.json();
       renderFeeds();
     } catch (e) {
       console.error('Failed to load feeds:', e);
@@ -190,21 +196,91 @@
 
   function renderFeeds() {
     if (!feedsList) return;
-    feedsList.innerHTML = feeds.map(f => `
-      <a href="#" class="nav-item" data-feed-id="${f.id}">
-        <span class="icon">📡</span>
-        <span class="label">${escapeHtml(f.title || f.url)}</span>
-        <span class="count" data-feed-count="${f.id}">0</span>
-      </a>
-    `).join('');
 
-    feedsList.querySelectorAll('.nav-item').forEach(el => {
+    // Group feeds by category
+    const catMap = new Map();
+    categories.forEach(c => catMap.set(c.id, { ...c, feeds: [] }));
+
+    // Uncategorized bucket
+    const uncategorized = [];
+
+    feeds.forEach(f => {
+      const catId = f.category_id;
+      if (catId && catMap.has(catId)) {
+        catMap.get(catId).feeds.push(f);
+      } else {
+        uncategorized.push(f);
+      }
+    });
+
+    let html = '';
+
+    // Render categorized feeds
+    const sortedCats = [...catMap.values()].filter(c => c.feeds.length > 0).sort((a, b) => a.title.localeCompare(b.title));
+    sortedCats.forEach(cat => {
+      html += `
+        <div class="feed-category">
+          <div class="category-header" data-cat-id="${cat.id}">
+            <span class="category-toggle">▸</span>
+            <span class="category-title">${escapeHtml(cat.title)}</span>
+            <span class="count" data-cat-count="${cat.id}">0</span>
+          </div>
+          <div class="category-feeds" data-cat-feeds="${cat.id}" style="display:none">
+            ${cat.feeds.map(f => feedItemHtml(f)).join('')}
+          </div>
+        </div>`;
+    });
+
+    // Render uncategorized feeds
+    if (uncategorized.length) {
+      html += `
+        <div class="feed-category">
+          <div class="category-header" data-cat-id="0">
+            <span class="category-toggle">▸</span>
+            <span class="category-title">Uncategorized</span>
+            <span class="count" data-cat-count="0">0</span>
+          </div>
+          <div class="category-feeds" data-cat-feeds="0" style="display:none">
+            ${uncategorized.map(f => feedItemHtml(f)).join('')}
+          </div>
+        </div>`;
+    }
+
+    feedsList.innerHTML = html;
+
+    // Category toggle click handlers
+    feedsList.querySelectorAll('.category-header').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        const catId = el.dataset.catId;
+        const feedsDiv = feedsList.querySelector(`[data-cat-feeds="${catId}"]`);
+        const toggle = el.querySelector('.category-toggle');
+        if (feedsDiv.style.display === 'none') {
+          feedsDiv.style.display = 'block';
+          toggle.textContent = '▾';
+        } else {
+          feedsDiv.style.display = 'none';
+          toggle.textContent = '▸';
+        }
+      });
+    });
+
+    // Feed click handlers
+    feedsList.querySelectorAll('.nav-item[data-feed-id]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.preventDefault();
         navigateTo('feed', el.dataset.feedId);
         closeSidebar();
       });
     });
+  }
+
+  function feedItemHtml(f) {
+    return `<a href="#" class="nav-item" data-feed-id="${f.id}">
+      <span class="icon">📡</span>
+      <span class="label">${escapeHtml(f.title || f.url)}</span>
+      <span class="count" data-feed-count="${f.id}">0</span>
+    </a>`;
   }
 
   // Load articles
@@ -301,6 +377,8 @@
     if (article && !article.is_read) {
       article.is_read = 1;
       el.classList.remove('unread');
+      const btn = el.querySelector('[data-action="read"]');
+      if (btn) btn.textContent = '● Read';
       await markRead(article.id);
       await updateCounts();
     }
@@ -390,6 +468,8 @@
         if (articles[index] && !articles[index].is_read) {
           articles[index].is_read = 1;
           el.classList.remove('unread');
+          const btn = el.querySelector('[data-action="read"]');
+          if (btn) btn.textContent = '● Read';
           promises.push(markRead(id));
         }
       }
@@ -411,11 +491,23 @@
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
 
-      // Update feed counts
+      // Update feed counts and category totals
       if (data.feeds) {
+        const catTotals = new Map();
         Object.entries(data.feeds).forEach(([id, count]) => {
           const el = document.querySelector(`[data-feed-count="${id}"]`);
           if (el) el.textContent = count;
+          // Accumulate category totals
+          const feed = feeds.find(f => f.id == id);
+          if (feed) {
+            const catId = feed.category_id || 0;
+            catTotals.set(catId, (catTotals.get(catId) || 0) + count);
+          }
+        });
+        // Update category counts
+        catTotals.forEach((total, catId) => {
+          const el = document.querySelector(`[data-cat-count="${catId}"]`);
+          if (el) el.textContent = total;
         });
       }
     } catch (e) {
