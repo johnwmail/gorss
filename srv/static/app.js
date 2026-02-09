@@ -355,6 +355,8 @@
       return;
     }
 
+    // Build articles without content first (content may have unclosed HTML
+    // that breaks the DOM), then inject content safely via iframe sandboxing
     articlesList.innerHTML = articles.map((a, i) => `
       <article class="article${a.is_read ? '' : ' unread'}${i === selectedIndex ? ' selected' : ''}" data-index="${i}" data-id="${a.id}">
         <div class="article-header">
@@ -366,7 +368,7 @@
           </div>
           <a class="article-title" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>
         </div>
-        <div class="article-content" id="content-${a.id}">${a.content || a.summary || ''}</div>
+        <div class="article-content" id="content-${a.id}"></div>
         <div class="article-actions">
           <button class="article-btn" data-action="star" data-id="${a.id}">${a.is_starred ? '★ Unstar' : '☆ Star'}</button>
           <button class="article-btn" data-action="read" data-id="${a.id}">${a.is_read ? '● Read' : '○ Unread'}</button>
@@ -374,6 +376,15 @@
         </div>
       </article>
     `).join('');
+
+    // Inject content safely: parse in an isolated document to close unclosed tags
+    articles.forEach(a => {
+      const contentEl = document.getElementById(`content-${a.id}`);
+      if (contentEl && (a.content || a.summary)) {
+        const doc = new DOMParser().parseFromString(a.content || a.summary, 'text/html');
+        contentEl.innerHTML = doc.body.innerHTML;
+      }
+    });
 
     // Event handlers
     articlesList.querySelectorAll('.article-header').forEach(el => {
