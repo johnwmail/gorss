@@ -18,7 +18,7 @@ services:
     
     # Network
     ports:
-      - "8000:8080"
+      - "8080:8080"
     
     # Volumes - data is writable, tmpfs for temp files
     volumes:
