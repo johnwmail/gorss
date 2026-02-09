@@ -8,7 +8,7 @@ User=exedev
 WorkingDirectory=/home/exedev/gorss
 ExecStart=/home/exedev/gorss/gorss
 Environment=GORSS_DB_PATH=/home/exedev/gorss/data/gorss.db
-Environment=GORSS_LISTEN=:8000
+Environment=GORSS_PORT=8080
 Restart=always
 RestartSec=5
 
