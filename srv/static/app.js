@@ -2,6 +2,41 @@
 (function() {
   'use strict';
 
+  // Custom confirm dialog (replaces native confirm())
+  function showConfirm(message, title = 'Confirm') {
+    return new Promise(resolve => {
+      const modal = document.getElementById('modal-confirm');
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-message').textContent = message;
+      modal.classList.add('open');
+
+      const ok = document.getElementById('confirm-ok');
+      const cancel = document.getElementById('confirm-cancel');
+
+      function cleanup(result) {
+        modal.classList.remove('open');
+        ok.removeEventListener('click', onOk);
+        cancel.removeEventListener('click', onCancel);
+        modal.removeEventListener('click', onBackdrop);
+        document.removeEventListener('keydown', onKey);
+        resolve(result);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      function onBackdrop(e) { if (e.target === modal) cleanup(false); }
+      function onKey(e) {
+        if (e.key === 'Escape') cleanup(false);
+        if (e.key === 'Enter') cleanup(true);
+      }
+
+      ok.addEventListener('click', onOk);
+      cancel.addEventListener('click', onCancel);
+      modal.addEventListener('click', onBackdrop);
+      document.addEventListener('keydown', onKey);
+      ok.focus();
+    });
+  }
+
   // State
   let currentView = 'fresh';
   let currentFeedId = null;
@@ -330,7 +365,7 @@
         e.stopPropagation();
         const catId = el.dataset.markCat;
         const catName = catId === '0' ? 'Uncategorized' : el.closest('.category-header').querySelector('.cat-header').textContent;
-        if (!confirm(`Mark all articles in "${catName}" as read?`)) return;
+        if (!await showConfirm(`Mark all articles in "${catName}" as read?`, 'Mark as Read')) return;
         try {
           await fetch(`/api/articles/mark-all-read?category_id=${catId}`, { method: 'POST' });
           await loadArticles();
@@ -710,7 +745,7 @@
   }
 
   async function handleMarkAllRead() {
-    if (!confirm('Mark all articles as read?')) return;
+    if (!await showConfirm('Mark all articles as read?', 'Mark as Read')) return;
 
     try {
       let url = '/api/articles/mark-all-read';
