@@ -831,3 +831,168 @@ func TestLoginLogout(t *testing.T) {
 		}
 	})
 }
+
+// --------------- Get Single Article ---------------
+
+func TestGetArticle(t *testing.T) {
+	s := newTestServer(t)
+	feed := seedFeed(t, s, "content-feed", nil, 2)
+
+	q := dbgen.New(s.DB)
+	ctx := context.Background()
+	arts, _ := q.GetArticlesByFeed(ctx, dbgen.GetArticlesByFeedParams{
+		UserID: "testuser", ID: feed.ID, UserID_2: "testuser", Limit: 10,
+	})
+	if len(arts) == 0 {
+		t.Fatal("expected articles")
+	}
+	id := fmt.Sprint(arts[0].ID)
+
+	t.Run("success", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("GET", "/api/articles/"+id, "")
+		r.SetPathValue("id", id)
+		s.HandleGetArticle(w, r)
+		assertStatus(t, w, 200)
+		var a map[string]any
+		decodeJSON(t, w, &a)
+		if a["content"] == nil {
+			t.Error("expected content field in single article response")
+		}
+		if a["summary"] == nil {
+			t.Error("expected summary field")
+		}
+	})
+
+	t.Run("invalid id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("GET", "/api/articles/abc", "")
+		r.SetPathValue("id", "abc")
+		s.HandleGetArticle(w, r)
+		assertStatus(t, w, 400)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("GET", "/api/articles/999999", "")
+		r.SetPathValue("id", "999999")
+		s.HandleGetArticle(w, r)
+		assertStatus(t, w, 404)
+	})
+}
+
+// --------------- Article List Strips Content ---------------
+
+func TestArticleListStripsContent(t *testing.T) {
+	s := newTestServer(t)
+	seedFeed(t, s, "strip-test", nil, 1)
+
+	w := httptest.NewRecorder()
+	s.HandleGetArticles(w, authReq("GET", "/api/articles", ""))
+	assertStatus(t, w, 200)
+
+	var list []map[string]any
+	decodeJSON(t, w, &list)
+	if len(list) == 0 {
+		t.Fatal("expected articles")
+	}
+	// List endpoint should NOT include content or summary
+	if _, ok := list[0]["content"]; ok {
+		t.Error("list should not contain content field")
+	}
+	if _, ok := list[0]["summary"]; ok {
+		t.Error("list should not contain summary field")
+	}
+	// But should have metadata
+	if _, ok := list[0]["title"]; !ok {
+		t.Error("list should contain title")
+	}
+	if _, ok := list[0]["feed_title"]; !ok {
+		t.Error("list should contain feed_title")
+	}
+}
+
+// --------------- Batch Mark Read ---------------
+
+func TestMarkReadBatch(t *testing.T) {
+	s := newTestServer(t)
+	feed := seedFeed(t, s, "batch-feed", nil, 5)
+
+	q := dbgen.New(s.DB)
+	ctx := context.Background()
+	arts, _ := q.GetArticlesByFeed(ctx, dbgen.GetArticlesByFeedParams{
+		UserID: "testuser", ID: feed.ID, UserID_2: "testuser", Limit: 10,
+	})
+
+	t.Run("batch mark 3 as read", func(t *testing.T) {
+		ids := []int64{arts[0].ID, arts[1].ID, arts[2].ID}
+		body := fmt.Sprintf(`{"ids":[%d,%d,%d]}`, ids[0], ids[1], ids[2])
+		w := httptest.NewRecorder()
+		s.HandleMarkReadBatch(w, authReq("POST", "/api/articles/mark-read-batch", body))
+		assertStatus(t, w, 200)
+
+		// Verify only 2 remain unread
+		w2 := httptest.NewRecorder()
+		s.HandleGetArticles(w2, authReq("GET", "/api/articles?view=unread", ""))
+		var list []json.RawMessage
+		decodeJSON(t, w2, &list)
+		if len(list) != 2 {
+			t.Errorf("got %d unread, want 2", len(list))
+		}
+	})
+
+	t.Run("empty ids", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.HandleMarkReadBatch(w, authReq("POST", "/api/articles/mark-read-batch", `{"ids":[]}`))
+		assertStatus(t, w, 400)
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.HandleMarkReadBatch(w, authReq("POST", "/api/articles/mark-read-batch", `not json`))
+		assertStatus(t, w, 400)
+	})
+}
+
+// --------------- Mark All Read by Category ---------------
+
+func TestMarkAllReadByCategory(t *testing.T) {
+	s := newTestServer(t)
+	q := dbgen.New(s.DB)
+	ctx := context.Background()
+	email := "test@example.com"
+	now := time.Now()
+	_ = q.UpsertUser(ctx, dbgen.UpsertUserParams{
+		ID: "testuser", Email: &email, CreatedAt: now, LastSeen: now,
+	})
+	cat, _ := q.CreateCategory(ctx, dbgen.CreateCategoryParams{UserID: "testuser", Title: "CatA"})
+	catID := cat.ID
+	seedFeed(t, s, "cat-feed", &catID, 3)
+	seedFeed(t, s, "other-feed", nil, 2)
+
+	w := httptest.NewRecorder()
+	s.HandleMarkAllRead(w, authReq("POST", "/api/articles/mark-all-read?category_id="+fmt.Sprint(catID), ""))
+	assertStatus(t, w, 200)
+
+	// Category articles should be read, other feed still unread
+	w2 := httptest.NewRecorder()
+	s.HandleGetArticles(w2, authReq("GET", "/api/articles?view=unread", ""))
+	var list []json.RawMessage
+	decodeJSON(t, w2, &list)
+	if len(list) != 2 {
+		t.Errorf("expected 2 unread (from other-feed), got %d", len(list))
+	}
+}
+
+// --------------- Import OPML ---------------
+
+func TestImportOPML(t *testing.T) {
+	s := newTestServer(t)
+
+	t.Run("bad request no file", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("POST", "/api/opml/import", "")
+		s.HandleImportOPML(w, r)
+		assertStatus(t, w, 400)
+	})
+}

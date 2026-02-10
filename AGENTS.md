@@ -134,6 +134,14 @@ spec:
 | GORSS_PASSWORD | - | Password for `password` auth mode |
 | TZ | UTC | Timezone |
 
+## Performance
+
+- **Gzip compression** on all responses
+- **Lazy-load article content** on expand (list endpoint strips content/summary)
+- **Cache-Control** headers for static assets
+- **Batch mark-read API** to avoid SQLite write contention
+- **SQLite WAL mode** + 5s busy timeout for concurrent read/write
+
 ## Authentication Modes
 
 - **none**: No authentication required (default)

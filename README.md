@@ -101,6 +101,10 @@ gorss/
 │   │   └── visitors.sql     # sqlc query definitions
 │   ├── dbgen/               # sqlc generated code
 │   └── sqlc.yaml            # sqlc config
+├── .github/workflows/
+│   ├── test.yml             # CI test workflow
+│   └── build-container.yml  # Container build workflow
+├── .golangci.yml             # Linter configuration
 ├── Dockerfile               # Multi-stage Docker build
 ├── docker-compose.yml
 ├── gorss.service             # systemd unit file

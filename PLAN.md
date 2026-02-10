@@ -36,7 +36,7 @@
 - [x] Mark article as read/unread
 - [x] Star/unstar articles
 - [x] Mark feed as read
-- [ ] Mark all as read (API exists, UI pending)
+- [x] Mark all as read
 
 ## Phase 5: Keyboard Navigation (Vi-style) ✅
 
@@ -66,11 +66,11 @@
 
 ## Phase 8: Polish & UX
 
-- [ ] Loading states
+- [x] Loading states
 - [ ] Error handling & display
 - [ ] Feed favicon display
-- [ ] Relative time display ("5 min ago")
-- [ ] Keyboard shortcut help modal
+- [x] Relative time display ("5 min ago")
+- [x] Keyboard shortcut help modal
 
 ## Phase 9: Container Deployment
 
@@ -78,6 +78,7 @@
 - [x] docker-compose.yml
 - [x] Health check endpoint (`/health`)
 - [ ] Graceful shutdown
+- [x] OPML import/export
 - [x] Environment variable configuration (`GORSS_PORT`, `GORSS_DB_PATH`, etc.)
 - [x] Volume mount for SQLite persistence
 - [x] systemd service (`gorss.service`)
@@ -140,4 +141,12 @@ POST /api/feeds/:id/mark-read    - Mark feed read
 POST /api/refresh          - Trigger feed refresh
 GET  /api/categories       - List categories
 POST /api/categories       - Create category
+GET  /api/articles/:id     - Get single article with full content
+POST /api/articles/mark-read-batch  - Batch mark articles as read
+POST /api/articles/mark-all-read    - Mark all as read (with optional feed_id or category_id)
+GET  /api/counts           - Get unread/total/starred counts
+GET  /api/opml/export      - Export OPML
+POST /api/opml/import      - Import OPML
+PUT  /api/categories/reorder - Reorder categories
+PUT  /api/feeds/reorder    - Reorder feeds
 ```
