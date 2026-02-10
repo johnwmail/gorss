@@ -28,9 +28,9 @@ func run() error {
 	flag.Parse()
 
 	slog.Info("gorss starting",
-		"version", Version,
-		"commit", CommitHash,
-		"built_at", BuildTime,
+		"Version", Version,
+		"CommitHash", CommitHash,
+		"BuildTime", BuildTime,
 	)
 
 	hostname, err := os.Hostname()
