@@ -402,32 +402,61 @@ func (s *Server) HandleUnstar(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
 
-// HandleMarkAllRead marks all articles as read (optionally filtered by feed)
+// markCategoryRead marks all articles in a category as read.
+func (s *Server) markCategoryRead(ctx context.Context, userID string, categoryID int64) error {
+	now := time.Now()
+	var catFilter string
+	var args []any
+	if categoryID == 0 {
+		catFilter = "f.category_id IS NULL"
+		args = []any{userID, now, userID}
+	} else {
+		catFilter = "f.category_id = ?"
+		args = []any{userID, now, categoryID, userID}
+	}
+	query := `INSERT OR REPLACE INTO article_states (user_id, article_id, is_read, read_at, is_starred, starred_at)
+		SELECT ?, a.id, 1, ?,
+			COALESCE(s.is_starred, 0), s.starred_at
+		FROM articles a
+		JOIN feeds f ON a.feed_id = f.id
+		LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = f.user_id
+		WHERE ` + catFilter + ` AND f.user_id = ?`
+	_, err := s.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
+// HandleMarkAllRead marks all articles as read (optionally filtered by feed or category)
 func (s *Server) HandleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 	userID, _ := s.ensureUser(r)
 	q := dbgen.New(s.DB)
 	now := time.Now()
 
-	// Check if filtering by feed
-	if feedIDStr := r.URL.Query().Get("feed_id"); feedIDStr != "" {
-		feedID, err := strconv.ParseInt(feedIDStr, 10, 64)
+	switch {
+	case r.URL.Query().Get("feed_id") != "":
+		feedID, err := strconv.ParseInt(r.URL.Query().Get("feed_id"), 10, 64)
 		if err != nil {
 			jsonError(w, "invalid feed_id", http.StatusBadRequest)
 			return
 		}
 		if err := q.MarkFeedRead(r.Context(), dbgen.MarkFeedReadParams{
-			UserID: userID,
-			ReadAt: &now,
-			FeedID: feedID,
+			UserID: userID, ReadAt: &now, FeedID: feedID,
 		}); err != nil {
 			jsonError(w, "failed to mark feed read", http.StatusInternalServerError)
 			return
 		}
-	} else {
+	case r.URL.Query().Get("category_id") != "":
+		catID, err := strconv.ParseInt(r.URL.Query().Get("category_id"), 10, 64)
+		if err != nil {
+			jsonError(w, "invalid category_id", http.StatusBadRequest)
+			return
+		}
+		if err := s.markCategoryRead(r.Context(), userID, catID); err != nil {
+			jsonError(w, "failed to mark category read", http.StatusInternalServerError)
+			return
+		}
+	default:
 		if err := q.MarkAllRead(r.Context(), dbgen.MarkAllReadParams{
-			UserID:   userID,
-			ReadAt:   &now,
-			UserID_2: userID,
+			UserID: userID, ReadAt: &now, UserID_2: userID,
 		}); err != nil {
 			jsonError(w, "failed to mark all read", http.StatusInternalServerError)
 			return

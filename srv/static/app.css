@@ -200,6 +200,27 @@ body {
   font-weight: 500;
 }
 
+.cat-mark-read {
+  margin-left: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.category-header:hover .cat-mark-read {
+  opacity: 0.6;
+}
+
+.cat-mark-read:hover {
+  opacity: 1 !important;
+  color: var(--primary);
+  background: rgba(0,0,0,0.06);
+}
+
 .category-feeds .nav-item {
   padding-left: 36px;
   font-size: 13px;

@@ -271,6 +271,7 @@
             <span class="category-toggle">▸</span>
             <span class="cat-header" data-cat-id="${cat.id}">${escapeHtml(cat.title)}</span>
             <span class="count" data-cat-count="${cat.id}">0</span>
+            <span class="cat-mark-read" data-mark-cat="${cat.id}" title="Mark all as read">✓</span>
           </div>
           <div class="category-feeds" data-cat-feeds="${cat.id}" style="display:none">
             ${cat.feeds.map(f => feedItemHtml(f)).join('')}
@@ -286,6 +287,7 @@
             <span class="category-toggle">▸</span>
             <span class="cat-header" data-cat-id="0">Uncategorized</span>
             <span class="count" data-cat-count="0">0</span>
+            <span class="cat-mark-read" data-mark-cat="0" title="Mark all as read">✓</span>
           </div>
           <div class="category-feeds" data-cat-feeds="0" style="display:none">
             ${uncategorized.map(f => feedItemHtml(f)).join('')}
@@ -318,6 +320,23 @@
         e.preventDefault();
         const catId = el.dataset.catId;
         navigateTo('category', null, parseInt(catId));
+      });
+    });
+
+    // Category mark-all-read click
+    feedsList.querySelectorAll('.cat-mark-read').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const catId = el.dataset.markCat;
+        const catName = catId === '0' ? 'Uncategorized' : el.closest('.category-header').querySelector('.cat-header').textContent;
+        if (!confirm(`Mark all articles in "${catName}" as read?`)) return;
+        try {
+          await fetch(`/api/articles/mark-all-read?category_id=${catId}`, { method: 'POST' });
+          await loadArticles();
+          await updateCounts();
+        } catch (err) {
+          console.error('Mark category read failed:', err);
+        }
       });
     });
 
@@ -600,8 +619,9 @@
           const total = catTotals.get(catId) || 0;
           const countEl = document.querySelector(`[data-cat-count="${catId}"]`);
           if (countEl) countEl.textContent = total;
-          catEl.style.display = total > 0 ? '' : 'none';
-          if (total > 0) anyVisible = true;
+          const isCurrent = currentCategoryId !== null && catId === currentCategoryId;
+          catEl.style.display = (total > 0 || isCurrent) ? '' : 'none';
+          if (total > 0 || isCurrent) anyVisible = true;
         });
 
         // Hide the "Feeds" section title if no feeds have unread articles
@@ -708,6 +728,7 @@
     try {
       let url = '/api/articles/mark-all-read';
       if (currentFeedId) url += `?feed_id=${currentFeedId}`;
+      else if (currentCategoryId !== null) url += `?category_id=${currentCategoryId}`;
       await fetch(url, { method: 'POST' });
       await loadArticles();
       await updateCounts();
