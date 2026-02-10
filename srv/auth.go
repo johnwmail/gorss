@@ -48,7 +48,9 @@ func GetPassword() string {
 // generateSessionID creates a random session ID
 func generateSessionID() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
 	return base64.URLEncoding.EncodeToString(b)
 }
 
@@ -283,7 +285,7 @@ func (s *Server) renderLoginPage(w http.ResponseWriter, errorMsg string) {
   </div>
 </body>
 </html>`
-	w.Write([]byte(html))
+	_, _ = w.Write([]byte(html))
 }
 
 func errorHTML(msg string) string {

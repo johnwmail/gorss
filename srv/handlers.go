@@ -16,13 +16,13 @@ import (
 // JSON response helper
 func jsonResponse(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func jsonError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
 // getUserID extracts user ID from exe.dev headers
@@ -57,7 +57,7 @@ func (s *Server) ensureUser(r *http.Request) (string, error) {
 // HandleHealth returns health status
 func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // HandleGetFeeds returns all feeds for the user
@@ -127,16 +127,16 @@ func (s *Server) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	// Store initial articles
 	for _, item := range result.Items {
-		q.UpsertArticle(r.Context(), dbgen.UpsertArticleParams{
-			FeedID:      feed.ID,
-			Guid:        item.GUID,
-			Url:         item.URL,
-			Title:       item.Title,
-			Author:      item.Author,
-			Content:     item.Content,
-			Summary:     item.Summary,
-			PublishedAt: item.PublishedAt,
-		})
+		_, _ = q.UpsertArticle(r.Context(), dbgen.UpsertArticleParams{
+				FeedID:      feed.ID,
+				Guid:        item.GUID,
+				Url:         item.URL,
+				Title:       item.Title,
+				Author:      item.Author,
+				Content:     item.Content,
+				Summary:     item.Summary,
+				PublishedAt: item.PublishedAt,
+			})
 	}
 
 	jsonResponse(w, feed)
@@ -202,7 +202,7 @@ LIMIT ? OFFSET ?`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var articles []dbgen.GetArticlesRow
 	for rows.Next() {
@@ -568,7 +568,7 @@ func (s *Server) HandleExportOPML(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header().Set("Content-Disposition", "attachment; filename=gorss-feeds.opml")
-	w.Write(opml)
+	_, _ = w.Write(opml)
 }
 
 func stringVal(s string) string {
@@ -590,7 +590,7 @@ func (s *Server) HandleImportOPML(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "no file provided", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	feeds, err := ParseOPML(file)
 	if err != nil {
@@ -677,7 +677,7 @@ func (s *Server) HandleImportOPML(w http.ResponseWriter, r *http.Request) {
 
 		// Store initial articles
 		for _, item := range result.Items {
-			q.UpsertArticle(r.Context(), dbgen.UpsertArticleParams{
+			_, _ = q.UpsertArticle(r.Context(), dbgen.UpsertArticleParams{
 				FeedID:      feed.ID,
 				Guid:        item.GUID,
 				Url:         item.URL,
@@ -712,7 +712,7 @@ func (s *Server) HandleReorderCategories(w http.ResponseWriter, r *http.Request)
 	}
 
 	for _, item := range req {
-		q.UpdateCategorySortOrder(r.Context(), dbgen.UpdateCategorySortOrderParams{
+		_ = q.UpdateCategorySortOrder(r.Context(), dbgen.UpdateCategorySortOrderParams{
 			SortOrder: item.Order,
 			ID:        item.ID,
 			UserID:    userID,
@@ -739,14 +739,14 @@ func (s *Server) HandleReorderFeeds(w http.ResponseWriter, r *http.Request) {
 
 	for _, item := range req {
 		if item.CategoryID != nil {
-			q.UpdateFeedCategory(r.Context(), dbgen.UpdateFeedCategoryParams{
+			_ = q.UpdateFeedCategory(r.Context(), dbgen.UpdateFeedCategoryParams{
 				CategoryID: item.CategoryID,
 				SortOrder:  item.Order,
 				ID:         item.ID,
 				UserID:     userID,
 			})
 		} else {
-			q.UpdateFeedSortOrder(r.Context(), dbgen.UpdateFeedSortOrderParams{
+			_ = q.UpdateFeedSortOrder(r.Context(), dbgen.UpdateFeedSortOrderParams{
 				SortOrder: item.Order,
 				ID:        item.ID,
 				UserID:    userID,

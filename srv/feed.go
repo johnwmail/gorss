@@ -115,7 +115,7 @@ func (s *Server) refreshFeedInternal(ctx context.Context, q *dbgen.Queries, feed
 
 	if err != nil {
 		errStr := err.Error()
-		q.UpdateFeedMeta(ctx, dbgen.UpdateFeedMetaParams{
+		_ = q.UpdateFeedMeta(ctx, dbgen.UpdateFeedMetaParams{
 			ID:          feed.ID,
 			Title:       feed.Title,
 			SiteUrl:     feed.SiteUrl,

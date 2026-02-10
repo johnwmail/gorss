@@ -169,7 +169,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure user exists
 	q := dbgen.New(s.DB)
-	q.UpsertUser(r.Context(), dbgen.UpsertUserParams{
+	_ = q.UpsertUser(r.Context(), dbgen.UpsertUserParams{
 		ID:        userID,
 		Email:     &userEmail,
 		CreatedAt: now,
