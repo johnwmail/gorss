@@ -103,6 +103,7 @@ func (s *Server) Serve(port string) error {
 	mux.HandleFunc("POST /api/refresh", s.HandleRefresh)
 	mux.HandleFunc("POST /api/feeds/refresh", s.HandleRefresh) // Alias for JS client
 
+	mux.HandleFunc("POST /api/articles/mark-read-batch", s.HandleMarkReadBatch)
 	mux.HandleFunc("POST /api/articles/mark-all-read", s.HandleMarkAllRead)
 
 	mux.HandleFunc("GET /api/categories", s.HandleGetCategories)

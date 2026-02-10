@@ -599,7 +599,7 @@
   // Scroll mark-as-read
   async function handleScrollMarkRead() {
     const listRect = articlesList.getBoundingClientRect();
-    const promises = [];
+    const idsToMark = [];
 
     articlesList.querySelectorAll('.article.unread').forEach(el => {
       const rect = el.getBoundingClientRect();
@@ -611,13 +611,17 @@
           el.classList.remove('unread');
           const btn = el.querySelector('[data-action="read"]');
           if (btn) btn.textContent = '● Read';
-          promises.push(markRead(id));
+          idsToMark.push(id);
         }
       }
     });
 
-    if (promises.length > 0) {
-      await Promise.all(promises);
+    if (idsToMark.length > 0) {
+      await fetch('/api/articles/mark-read-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsToMark })
+      });
       await updateCounts();
     }
   }

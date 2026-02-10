@@ -334,6 +334,7 @@ func (s *Server) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 		ArticleID: articleID,
 		ReadAt:    &now,
 	}); err != nil {
+		slog.Error("mark read", "article_id", articleID, "error", err)
 		jsonError(w, "failed to mark read", http.StatusInternalServerError)
 		return
 	}
@@ -423,6 +424,51 @@ func (s *Server) markCategoryRead(ctx context.Context, userID string, categoryID
 		WHERE ` + catFilter + ` AND f.user_id = ?`
 	_, err := s.DB.ExecContext(ctx, query, args...)
 	return err
+}
+
+// HandleMarkReadBatch marks multiple articles as read in a single transaction
+func (s *Server) HandleMarkReadBatch(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.IDs) == 0 {
+		jsonError(w, "invalid request: ids required", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := s.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		slog.Error("batch mark-read: begin tx", "error", err)
+		jsonError(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now()
+	stmt, err := tx.PrepareContext(r.Context(), `INSERT INTO article_states (user_id, article_id, is_read, read_at)
+		VALUES (?, ?, 1, ?)
+		ON CONFLICT (user_id, article_id) DO UPDATE SET is_read = 1, read_at = excluded.read_at`)
+	if err != nil {
+		slog.Error("batch mark-read: prepare", "error", err)
+		jsonError(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	defer func() { _ = stmt.Close() }()
+
+	for _, id := range body.IDs {
+		if _, err := stmt.ExecContext(r.Context(), userID, id, &now); err != nil {
+			slog.Error("batch mark-read: exec", "article_id", id, "error", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("batch mark-read: commit", "error", err)
+		jsonError(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]string{"status": "ok"})
 }
 
 // HandleMarkAllRead marks all articles as read (optionally filtered by feed or category)
