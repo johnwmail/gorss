@@ -14,8 +14,18 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Build args for version info
+ARG VERSION=vDev
+ARG BUILD_TIME=timeless
+ARG COMMIT_HASH=sha-unknown
+
 # Build binary
-RUN CGO_ENABLED=1 GOOS=linux go build -o gorss -ldflags='-s -w' ./cmd/srv
+RUN CGO_ENABLED=1 GOOS=linux go build -o gorss \
+  -ldflags="-s -w \
+    -X main.Version=${VERSION} \
+    -X main.BuildTime=${BUILD_TIME} \
+    -X main.CommitHash=${COMMIT_HASH}" \
+  ./cmd/srv
 
 # Runtime stage
 FROM alpine:3.19

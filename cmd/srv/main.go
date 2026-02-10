@@ -3,9 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"srv.exe.dev/srv"
+)
+
+// Build-time variables, injected via -ldflags.
+var (
+	Version    = "vDev"
+	BuildTime  = "timeless"
+	CommitHash = "sha-unknown"
 )
 
 var flagPort = flag.String("port", "8080", "port to listen on")
@@ -18,6 +26,13 @@ func main() {
 
 func run() error {
 	flag.Parse()
+
+	slog.Info("gorss starting",
+		"version", Version,
+		"commit", CommitHash,
+		"built_at", BuildTime,
+	)
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "unknown"
