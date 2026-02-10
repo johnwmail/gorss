@@ -205,20 +205,25 @@ body {
   font-size: 13px;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
+  opacity: 0.5;
   padding: 2px 4px;
   border-radius: 4px;
 }
 
-.category-header:hover .cat-mark-read {
-  opacity: 0.6;
-}
-
-.cat-mark-read:hover {
-  opacity: 1 !important;
-  color: var(--primary);
-  background: rgba(0,0,0,0.06);
+/* Desktop: hide by default, show on hover */
+@media (hover: hover) {
+  .cat-mark-read {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .category-header:hover .cat-mark-read {
+    opacity: 0.6;
+  }
+  .cat-mark-read:hover {
+    opacity: 1 !important;
+    color: var(--primary);
+    background: rgba(0,0,0,0.06);
+  }
 }
 
 .category-feeds .nav-item {
