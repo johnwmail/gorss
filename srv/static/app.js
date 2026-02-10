@@ -190,14 +190,14 @@
       }
       const countEl = document.querySelector(`[data-cat-count="${currentCategoryId}"]`);
       const count = countEl ? parseInt(countEl.textContent) || 0 : 0;
-      if (count > 0) title += ` (${count})`;
+      title += ` (${count})`;
     }
     // Append count for top-level views
     const countIds = { all: 'count-all', fresh: 'count-fresh', starred: 'count-starred' };
     if (!currentFeedId && currentCategoryId === null && countIds[currentView]) {
       const el = document.getElementById(countIds[currentView]);
       const count = el ? parseInt(el.textContent) || 0 : 0;
-      if (count > 0) title += ` (${count})`;
+      title += ` (${count})`;
     }
     document.getElementById('current-view').textContent = title;
   }
@@ -585,10 +585,7 @@
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
 
-      // Refresh the header title with updated counts
-      updateViewTitle();
-
-      // Update feed counts, hide feeds with 0 unread, and update category totals
+      // Update feed counts and category totals
       if (data.feeds) {
         const catTotals = new Map();
 
@@ -615,6 +612,9 @@
           if (countEl) countEl.textContent = total;
         });
       }
+
+      // Refresh header title after all counts are updated
+      updateViewTitle();
     } catch (e) {
       console.error('Failed to update counts:', e);
     }
