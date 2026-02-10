@@ -136,6 +136,12 @@
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(handleScrollMarkRead, 300);
     });
+
+    // Resize spacer on window resize
+    window.addEventListener('resize', () => {
+      const spacer = articlesList.querySelector('.scroll-spacer');
+      if (spacer) spacer.style.height = Math.max(0, articlesList.clientHeight - 80) + 'px';
+    });
   }
 
   function setupKeyboardNav() {
@@ -457,6 +463,12 @@
       }
     });
 
+    // Add scroll spacer so last article can be scrolled to top (for scroll-mark-as-read)
+    const spacer = document.createElement('div');
+    spacer.className = 'scroll-spacer';
+    spacer.style.height = Math.max(0, articlesList.clientHeight - 80) + 'px';
+    articlesList.appendChild(spacer);
+
     // Event handlers
     articlesList.querySelectorAll('.article-header').forEach(el => {
       el.addEventListener('click', (e) => {
@@ -591,7 +603,7 @@
 
     articlesList.querySelectorAll('.article.unread').forEach(el => {
       const rect = el.getBoundingClientRect();
-      if (rect.bottom < listRect.top + 50) {
+      if (rect.top < listRect.top) {
         const id = parseInt(el.dataset.id);
         const index = parseInt(el.dataset.index);
         if (articles[index] && !articles[index].is_read) {
