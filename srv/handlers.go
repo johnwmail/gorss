@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"srv.exe.dev/db/dbgen"
+	"github.com/johnwmail/gorss/db/dbgen"
 )
 
 // JSON response helper

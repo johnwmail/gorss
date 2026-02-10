@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
-	"srv.exe.dev/db/dbgen"
+	"github.com/johnwmail/gorss/db/dbgen"
 )
 
 // FeedFetcher handles RSS/Atom feed fetching and parsing

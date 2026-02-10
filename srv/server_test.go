@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"srv.exe.dev/db/dbgen"
+	"github.com/johnwmail/gorss/db/dbgen"
 )
 
 // newTestServer creates a Server with a temp SQLite DB.

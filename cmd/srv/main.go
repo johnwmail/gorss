@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"srv.exe.dev/srv"
+	"github.com/johnwmail/gorss/srv"
 )
 
 // Build-time variables, injected via -ldflags.

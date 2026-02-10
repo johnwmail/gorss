@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"srv.exe.dev/db"
-	"srv.exe.dev/db/dbgen"
+	"github.com/johnwmail/gorss/db"
+	"github.com/johnwmail/gorss/db/dbgen"
 )
 
 type Server struct {

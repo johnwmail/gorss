@@ -1,4 +1,4 @@
-module srv.exe.dev
+module github.com/johnwmail/gorss
 
 go 1.25.7
 
