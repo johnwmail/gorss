@@ -403,7 +403,7 @@
     let url = '/api/articles?limit=100';
     if (currentView === 'fresh') url += '&view=unread';
     else if (currentView === 'starred') url += '&view=starred';
-    else if (currentCategoryId) url += `&category_id=${currentCategoryId}&view=unread`;
+    else if (currentCategoryId !== null) url += `&category_id=${currentCategoryId}&view=unread`;
     else if (currentFeedId) url += `&feed_id=${currentFeedId}`;
 
     try {
