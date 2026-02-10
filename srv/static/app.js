@@ -86,6 +86,7 @@
 
     // Mark all read
     document.getElementById('btn-mark-all-read')?.addEventListener('click', handleMarkAllRead);
+    document.getElementById('btn-header-mark-read')?.addEventListener('click', handleMarkAllRead);
 
     // Close modals
     document.querySelectorAll('.btn-cancel').forEach(btn => {

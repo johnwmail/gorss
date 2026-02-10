@@ -295,6 +295,23 @@ body {
 .main-title {
   font-size: 20px;
   font-weight: 500;
+  flex: 1;
+}
+
+.header-mark-read {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.header-mark-read:hover {
+  background: rgba(255,255,255,0.35);
 }
 
 .articles-container {
