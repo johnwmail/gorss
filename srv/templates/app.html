@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>GoRSS</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v={{.Version}}">
 </head>
 <body>
   <div class="app">
@@ -120,6 +120,6 @@
 
   <button class="fab" id="btn-fab-refresh" title="Refresh">🔄</button>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v={{.Version}}"></script>
 </body>
 </html>

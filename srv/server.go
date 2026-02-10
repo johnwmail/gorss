@@ -25,16 +25,21 @@ type Server struct {
 	Hostname     string
 	TemplatesDir string
 	StaticDir    string
+	Version      string // used as cache-buster for static assets
 	fetcher      *FeedFetcher
 }
 
-func New(dbPath, hostname string) (*Server, error) {
+func New(dbPath, hostname, version string) (*Server, error) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	baseDir := filepath.Dir(thisFile)
+	if version == "" {
+		version = "dev"
+	}
 	srv := &Server{
 		Hostname:     hostname,
 		TemplatesDir: filepath.Join(baseDir, "templates"),
 		StaticDir:    filepath.Join(baseDir, "static"),
+		Version:      version,
 		fetcher:      NewFeedFetcher(),
 	}
 	if err := srv.setUpDatabase(dbPath); err != nil {
@@ -87,7 +92,7 @@ func (s *Server) Serve(port string) error {
 	})
 	staticHandler := http.StripPrefix("/static/", http.FileServer(http.Dir(s.StaticDir)))
 	mux.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		staticHandler.ServeHTTP(w, r)
 	})
 
@@ -224,6 +229,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	categories, _ := q.GetCategories(r.Context(), userID)
 
 	data := map[string]any{
+		"Version":      s.Version,
 		"Hostname":     s.Hostname,
 		"UserEmail":    userEmail,
 		"UserID":       userID,

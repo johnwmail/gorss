@@ -18,7 +18,7 @@ import (
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	db := filepath.Join(t.TempDir(), "test.sqlite3")
-	s, err := New(db, "test-host")
+	s, err := New(db, "test-host", "test")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
