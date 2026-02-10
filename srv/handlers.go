@@ -312,10 +312,51 @@ func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if articles == nil {
-		articles = []dbgen.GetArticlesRow{}
+	// Strip content/summary from list response to reduce payload size.
+	// Clients fetch full content via GET /api/articles/{id} on demand.
+	type articleSummary struct {
+		ID          int64      `json:"id"`
+		FeedID      int64      `json:"feed_id"`
+		Url         string     `json:"url"`
+		Title       string     `json:"title"`
+		Author      string     `json:"author"`
+		PublishedAt *time.Time `json:"published_at"`
+		FeedTitle   string     `json:"feed_title"`
+		FeedSiteUrl string     `json:"feed_site_url"`
+		IsRead      int64      `json:"is_read"`
+		IsStarred   int64      `json:"is_starred"`
 	}
-	jsonResponse(w, articles)
+	result := make([]articleSummary, 0, len(articles))
+	for _, a := range articles {
+		result = append(result, articleSummary{
+			ID: a.ID, FeedID: a.FeedID, Url: a.Url, Title: a.Title,
+			Author: a.Author, PublishedAt: a.PublishedAt,
+			FeedTitle: a.FeedTitle, FeedSiteUrl: a.FeedSiteUrl,
+			IsRead: a.IsRead, IsStarred: a.IsStarred,
+		})
+	}
+	jsonResponse(w, result)
+}
+
+// HandleGetArticle returns a single article with full content
+func (s *Server) HandleGetArticle(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid article id", http.StatusBadRequest)
+		return
+	}
+	q := dbgen.New(s.DB)
+	a, err := q.GetArticle(r.Context(), dbgen.GetArticleParams{
+		UserID:   userID,
+		ID:       articleID,
+		UserID_2: userID,
+	})
+	if err != nil {
+		jsonError(w, "article not found", http.StatusNotFound)
+		return
+	}
+	jsonResponse(w, a)
 }
 
 // HandleMarkRead marks an article as read

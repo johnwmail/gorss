@@ -70,10 +70,12 @@
       console.log('Event listeners set up');
       setupKeyboardNav();
       console.log('Keyboard nav set up');
-      await loadFeeds();
-      console.log('Feeds loaded');
-      await updateCounts();
-      console.log('Counts updated');
+      // Load feeds, counts, and navigate in parallel for fast startup
+      const [feedsOk] = await Promise.allSettled([
+        loadFeeds(),
+        updateCounts()
+      ]);
+      if (feedsOk.status === 'rejected') console.error('Failed to load feeds');
       navigateTo(currentView);
       console.log('GoRSS init complete');
     } catch (e) {
@@ -449,20 +451,6 @@
       </article>
     `).join('');
 
-    // Inject content safely: parse in an isolated document to close unclosed tags
-    articles.forEach(a => {
-      const contentEl = document.getElementById(`content-${a.id}`);
-      if (contentEl && (a.content || a.summary)) {
-        const doc = new DOMParser().parseFromString(a.content || a.summary, 'text/html');
-        contentEl.innerHTML = doc.body.innerHTML;
-        // Force all links in article content to open in new tab
-        contentEl.querySelectorAll('a').forEach(link => {
-          link.setAttribute('target', '_blank');
-          link.setAttribute('rel', 'noopener noreferrer');
-        });
-      }
-    });
-
     // Add scroll spacer so last article can be scrolled to top (for scroll-mark-as-read)
     const spacer = document.createElement('div');
     spacer.className = 'scroll-spacer';
@@ -471,12 +459,32 @@
 
     // Event handlers
     articlesList.querySelectorAll('.article-header').forEach(el => {
-      el.addEventListener('click', (e) => {
+      el.addEventListener('click', async (e) => {
         if (e.target.classList.contains('article-star')) return;
         const article = el.closest('.article');
         const index = parseInt(article.dataset.index);
         selectArticle(index);
         article.classList.toggle('expanded');
+
+        // Lazy-load content on first expand
+        const contentEl = article.querySelector('.article-content');
+        if (article.classList.contains('expanded') && !contentEl.dataset.loaded) {
+          contentEl.innerHTML = '<div class="loading">Loading...</div>';
+          try {
+            const id = parseInt(article.dataset.id);
+            const res = await fetch(`/api/articles/${id}`);
+            const data = await res.json();
+            const doc = new DOMParser().parseFromString(data.content || data.summary || '', 'text/html');
+            contentEl.innerHTML = doc.body.innerHTML;
+            contentEl.querySelectorAll('a').forEach(link => {
+              link.setAttribute('target', '_blank');
+              link.setAttribute('rel', 'noopener noreferrer');
+            });
+          } catch {
+            contentEl.innerHTML = '<div class="loading">Failed to load content</div>';
+          }
+          contentEl.dataset.loaded = '1';
+        }
       });
     });
 

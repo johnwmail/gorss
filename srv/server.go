@@ -1,6 +1,7 @@
 package srv
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"srv.exe.dev/db"
@@ -83,7 +85,11 @@ func (s *Server) Serve(port string) error {
 	mux.HandleFunc("GET /mobile", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	})
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(s.StaticDir))))
+	staticHandler := http.StripPrefix("/static/", http.FileServer(http.Dir(s.StaticDir)))
+	mux.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		staticHandler.ServeHTTP(w, r)
+	})
 
 	// Health check
 	mux.HandleFunc("GET /health", s.HandleHealth)
@@ -94,6 +100,7 @@ func (s *Server) Serve(port string) error {
 	mux.HandleFunc("DELETE /api/feeds/{id}", s.HandleUnsubscribe)
 
 	mux.HandleFunc("GET /api/articles", s.HandleGetArticles)
+	mux.HandleFunc("GET /api/articles/{id}", s.HandleGetArticle)
 	mux.HandleFunc("POST /api/articles/{id}/read", s.HandleMarkRead)
 	mux.HandleFunc("POST /api/articles/{id}/unread", s.HandleMarkUnread)
 	mux.HandleFunc("POST /api/articles/{id}/star", s.HandleStar)
@@ -154,8 +161,37 @@ func (s *Server) Serve(port string) error {
 	authMode := GetAuthMode()
 	slog.Info("starting server", "addr", addr, "auth_mode", authMode)
 
-	handler := s.AuthMiddleware(mux)
+	handler := gzipMiddleware(s.AuthMiddleware(mux))
 	return http.ListenAndServe(addr, handler)
+}
+
+// gzip middleware
+var gzipPool = sync.Pool{
+	New: func() any { w, _ := gzip.NewWriterLevel(nil, gzip.DefaultCompression); return w },
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gz *gzip.Writer
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) { return w.gz.Write(b) }
+
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gz := gzipPool.Get().(*gzip.Writer)
+		defer gzipPool.Put(gz)
+		gz.Reset(w)
+		defer func() { _ = gz.Close() }()
+
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Del("Content-Length")
+		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, gz: gz}, r)
+	})
 }
 
 // HandleRoot serves the unified responsive application page
