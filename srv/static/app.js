@@ -601,32 +601,18 @@
           const el = document.querySelector(`[data-feed-count="${id}"]`);
           if (el) el.textContent = count;
 
-          // Show/hide feed based on unread count
-          const feedEl = document.querySelector(`[data-feed-id="${id}"]`);
-          if (feedEl) {
-            feedEl.style.display = count > 0 ? '' : 'none';
-          }
-
           // Accumulate category totals
           const catId = f.category_id || 0;
           catTotals.set(catId, (catTotals.get(catId) || 0) + count);
         });
 
-        // Update category counts and hide categories with 0 unread
-        let anyVisible = false;
+        // Update category counts
         feedsList.querySelectorAll('.feed-category').forEach(catEl => {
           const catId = parseInt(catEl.querySelector('.category-header')?.dataset.catId || '0');
           const total = catTotals.get(catId) || 0;
           const countEl = document.querySelector(`[data-cat-count="${catId}"]`);
           if (countEl) countEl.textContent = total;
-          const isCurrent = currentCategoryId !== null && catId === currentCategoryId;
-          catEl.style.display = (total > 0 || isCurrent) ? '' : 'none';
-          if (total > 0 || isCurrent) anyVisible = true;
         });
-
-        // Hide the "Feeds" section title if no feeds have unread articles
-        const feedsSectionTitle = document.querySelector('.nav-section-title');
-        if (feedsSectionTitle) feedsSectionTitle.style.display = anyVisible ? '' : 'none';
       }
     } catch (e) {
       console.error('Failed to update counts:', e);
