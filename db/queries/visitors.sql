@@ -68,7 +68,10 @@ UPDATE feeds SET
   site_url = ?,
   description = ?,
   last_updated = ?,
-  last_error = ?
+  last_error = ?,
+  etag = ?,
+  last_modified = ?,
+  error_count = ?
 WHERE id = ?;
 
 -- name: DeleteFeed :exec

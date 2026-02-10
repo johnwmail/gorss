@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -13,20 +14,25 @@ import (
 // FeedFetcher handles RSS/Atom feed fetching and parsing
 type FeedFetcher struct {
 	parser *gofeed.Parser
+	client *http.Client
 }
 
 func NewFeedFetcher() *FeedFetcher {
 	return &FeedFetcher{
 		parser: gofeed.NewParser(),
+		client: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-// FetchResult contains the parsed feed data
-type FetchResult struct {
+// FeedFetchResult contains the parsed feed data
+type FeedFetchResult struct {
 	Title       string
 	SiteURL     string
 	Description string
 	Items       []FeedItem
+	// HTTP caching headers from the response
+	ETag         string
+	LastModified string
 }
 
 type FeedItem struct {
@@ -39,18 +45,57 @@ type FeedItem struct {
 	PublishedAt *time.Time
 }
 
-// Fetch fetches and parses a feed URL
-func (f *FeedFetcher) Fetch(ctx context.Context, url string) (*FetchResult, error) {
-	feed, err := f.parser.ParseURLWithContext(url, ctx)
+// errNotModified is returned when the server responds with 304 Not Modified.
+var errNotModified = fmt.Errorf("feed not modified")
+
+// Fetch fetches and parses a feed URL (unconditional GET, used for initial subscribe).
+func (f *FeedFetcher) Fetch(ctx context.Context, url string) (*FeedFetchResult, error) {
+	return f.fetchWithCaching(ctx, url, "", "")
+}
+
+// FetchConditional does a conditional GET using saved ETag/Last-Modified.
+// Returns errNotModified if the server says nothing changed.
+func (f *FeedFetcher) FetchConditional(ctx context.Context, url, etag, lastModified string) (*FeedFetchResult, error) {
+	return f.fetchWithCaching(ctx, url, etag, lastModified)
+}
+
+func (f *FeedFetcher) fetchWithCaching(ctx context.Context, url, etag, lastModified string) (*FeedFetchResult, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "GoRSS/1.0 (feed reader)")
+
+	// Conditional GET headers
+	if etag != "" {
+		req.Header.Set("If-None-Match", etag)
+	}
+	if lastModified != "" {
+		req.Header.Set("If-Modified-Since", lastModified)
+	}
+
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotModified {
+		return nil, errNotModified
+	}
+
+	feed, err := f.parser.Parse(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("parse feed: %w", err)
 	}
 
-	result := &FetchResult{
-		Title:       feed.Title,
-		SiteURL:     feed.Link,
-		Description: feed.Description,
-		Items:       make([]FeedItem, 0, len(feed.Items)),
+	result := &FeedFetchResult{
+		Title:        feed.Title,
+		SiteURL:      feed.Link,
+		Description:  feed.Description,
+		Items:        make([]FeedItem, 0, len(feed.Items)),
+		ETag:         resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified"),
 	}
 
 	for _, item := range feed.Items {
@@ -62,17 +107,14 @@ func (f *FeedFetcher) Fetch(ctx context.Context, url string) (*FetchResult, erro
 			Summary: item.Description,
 		}
 
-		// Use GUID or URL as fallback
 		if fi.GUID == "" {
 			fi.GUID = item.Link
 		}
 
-		// Get author
 		if item.Author != nil {
 			fi.Author = item.Author.Name
 		}
 
-		// Get published date
 		if item.PublishedParsed != nil {
 			fi.PublishedAt = item.PublishedParsed
 		} else if item.UpdatedParsed != nil {
@@ -85,12 +127,41 @@ func (f *FeedFetcher) Fetch(ctx context.Context, url string) (*FetchResult, erro
 	return result, nil
 }
 
+// filterOldItems removes items older than the cutoff from the result in place.
+func filterOldItems(items []FeedItem, cutoff time.Time) []FeedItem {
+	filtered := items[:0]
+	for _, item := range items {
+		// Keep items with no published date (can't determine age)
+		if item.PublishedAt == nil || item.PublishedAt.After(cutoff) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+// maxBackoffHours caps exponential backoff at 24 hours.
+const maxBackoffHours = 24
+
+// shouldSkipFeed returns true if a feed with consecutive errors should be
+// skipped this refresh cycle (exponential backoff).
+func shouldSkipFeed(feed *dbgen.Feed) bool {
+	if feed.ErrorCount == 0 || feed.LastUpdated == nil {
+		return false
+	}
+	// Backoff: 2^errorCount hours, capped at 24h
+	backoffHours := 1 << min(feed.ErrorCount, 5) // 2, 4, 8, 16, 32 → capped at 24
+	if backoffHours > maxBackoffHours {
+		backoffHours = maxBackoffHours
+	}
+	nextAllowed := feed.LastUpdated.Add(time.Duration(backoffHours) * time.Hour)
+	return time.Now().Before(nextAllowed)
+}
+
 // RefreshFeed fetches a feed and stores new articles
 func (s *Server) RefreshFeed(ctx context.Context, feedID int64) error {
 	q := dbgen.New(s.DB)
 
-	// Get feed info
-	feeds, err := q.GetAllFeedsForRefresh(ctx, 1)
+	feeds, err := q.GetAllFeedsForRefresh(ctx, 1000)
 	if err != nil {
 		return fmt.Errorf("get feed: %w", err)
 	}
@@ -110,34 +181,74 @@ func (s *Server) RefreshFeed(ctx context.Context, feedID int64) error {
 }
 
 func (s *Server) refreshFeedInternal(ctx context.Context, q *dbgen.Queries, feed *dbgen.Feed) error {
-	result, err := s.fetcher.Fetch(ctx, feed.Url)
+	// Skip feeds in error backoff
+	if shouldSkipFeed(feed) {
+		slog.Debug("skipping feed (backoff)", "feed_id", feed.ID, "error_count", feed.ErrorCount)
+		return nil
+	}
+
+	// Use conditional GET with saved caching headers
+	result, err := s.fetcher.FetchConditional(ctx, feed.Url, feed.Etag, feed.LastModified)
 	now := time.Now()
+
+	if err == errNotModified {
+		slog.Debug("feed not modified (304)", "feed_id", feed.ID, "title", feed.Title)
+		// Update last_updated timestamp, reset error count, keep caching headers
+		_ = q.UpdateFeedMeta(ctx, dbgen.UpdateFeedMetaParams{
+			ID:           feed.ID,
+			Title:        feed.Title,
+			SiteUrl:      feed.SiteUrl,
+			Description:  feed.Description,
+			LastUpdated:  &now,
+			LastError:    nil,
+			Etag:         feed.Etag,
+			LastModified: feed.LastModified,
+			ErrorCount:   0,
+		})
+		return nil
+	}
 
 	if err != nil {
 		errStr := err.Error()
 		_ = q.UpdateFeedMeta(ctx, dbgen.UpdateFeedMetaParams{
-			ID:          feed.ID,
-			Title:       feed.Title,
-			SiteUrl:     feed.SiteUrl,
-			Description: feed.Description,
-			LastUpdated: &now,
-			LastError:   &errStr,
+			ID:           feed.ID,
+			Title:        feed.Title,
+			SiteUrl:      feed.SiteUrl,
+			Description:  feed.Description,
+			LastUpdated:  &now,
+			LastError:    &errStr,
+			Etag:         feed.Etag,
+			LastModified: feed.LastModified,
+			ErrorCount:   feed.ErrorCount + 1,
 		})
 		return fmt.Errorf("fetch feed %s: %w", feed.Url, err)
 	}
 
-	// Update feed metadata
+	// Filter out articles older than purge threshold
+	if s.PurgeDays > 0 {
+		cutoff := time.Now().AddDate(0, 0, -s.PurgeDays)
+		beforeCount := len(result.Items)
+		result.Items = filterOldItems(result.Items, cutoff)
+		if skipped := beforeCount - len(result.Items); skipped > 0 {
+			slog.Debug("filtered old articles", "feed_id", feed.ID, "skipped", skipped, "cutoff_days", s.PurgeDays)
+		}
+	}
+
+	// Update feed metadata with new caching headers, reset error count
 	title := result.Title
 	if title == "" {
 		title = feed.Title
 	}
 	err = q.UpdateFeedMeta(ctx, dbgen.UpdateFeedMetaParams{
-		ID:          feed.ID,
-		Title:       title,
-		SiteUrl:     result.SiteURL,
-		Description: result.Description,
-		LastUpdated: &now,
-		LastError:   nil,
+		ID:           feed.ID,
+		Title:        title,
+		SiteUrl:      result.SiteURL,
+		Description:  result.Description,
+		LastUpdated:  &now,
+		LastError:    nil,
+		Etag:         result.ETag,
+		LastModified: result.LastModified,
+		ErrorCount:   0,
 	})
 	if err != nil {
 		slog.Warn("update feed meta", "error", err, "feed_id", feed.ID)
@@ -184,7 +295,7 @@ func (s *Server) StartBackgroundRefresh(ctx context.Context, interval time.Durat
 
 func (s *Server) refreshAllFeeds(ctx context.Context) {
 	q := dbgen.New(s.DB)
-	feeds, err := q.GetAllFeedsForRefresh(ctx, 100)
+	feeds, err := q.GetAllFeedsForRefresh(ctx, 1000)
 	if err != nil {
 		slog.Error("get feeds for refresh", "error", err)
 		return
@@ -200,11 +311,14 @@ func (s *Server) refreshAllFeeds(ctx context.Context) {
 }
 
 // StartAutoPurge starts a goroutine that periodically purges old read articles
-func (s *Server) StartAutoPurge(ctx context.Context, purgeDays int) {
+func (s *Server) StartAutoPurge(ctx context.Context) {
+	if s.PurgeDays <= 0 {
+		return
+	}
 	go func() {
 		// Run purge once at startup after a short delay
 		time.Sleep(30 * time.Second)
-		s.purgeOldArticles(purgeDays)
+		s.purgeOldArticles()
 
 		// Then run daily
 		ticker := time.NewTicker(24 * time.Hour)
@@ -216,20 +330,18 @@ func (s *Server) StartAutoPurge(ctx context.Context, purgeDays int) {
 				slog.Info("stopping auto-purge")
 				return
 			case <-ticker.C:
-				s.purgeOldArticles(purgeDays)
+				s.purgeOldArticles()
 			}
 		}
 	}()
 }
 
-func (s *Server) purgeOldArticles(purgeDays int) {
+func (s *Server) purgeOldArticles() {
 	q := dbgen.New(s.DB)
 	ctx := context.Background()
 
-	// Calculate cutoff date
-	cutoff := time.Now().AddDate(0, 0, -purgeDays)
+	cutoff := time.Now().AddDate(0, 0, -s.PurgeDays)
 
-	// Count first
 	count, err := q.CountOldReadArticles(ctx, &cutoff)
 	if err != nil {
 		slog.Error("count old articles", "error", err)
@@ -241,7 +353,6 @@ func (s *Server) purgeOldArticles(purgeDays int) {
 		return
 	}
 
-	// Purge
 	result, err := q.PurgeOldReadArticles(ctx, &cutoff)
 	if err != nil {
 		slog.Error("purge old articles", "error", err)
@@ -249,5 +360,5 @@ func (s *Server) purgeOldArticles(purgeDays int) {
 	}
 
 	deleted, _ := result.RowsAffected()
-	slog.Info("purged old read articles", "count", deleted, "cutoff_days", purgeDays)
+	slog.Info("purged old read articles", "count", deleted, "cutoff_days", s.PurgeDays)
 }

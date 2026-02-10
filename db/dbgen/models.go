@@ -39,17 +39,20 @@ type Category struct {
 }
 
 type Feed struct {
-	ID          int64      `json:"id"`
-	UserID      string     `json:"user_id"`
-	CategoryID  *int64     `json:"category_id"`
-	Url         string     `json:"url"`
-	Title       string     `json:"title"`
-	SiteUrl     string     `json:"site_url"`
-	Description string     `json:"description"`
-	LastUpdated *time.Time `json:"last_updated"`
-	LastError   *string    `json:"last_error"`
-	CreatedAt   time.Time  `json:"created_at"`
-	SortOrder   int64      `json:"sort_order"`
+	ID           int64      `json:"id"`
+	UserID       string     `json:"user_id"`
+	CategoryID   *int64     `json:"category_id"`
+	Url          string     `json:"url"`
+	Title        string     `json:"title"`
+	SiteUrl      string     `json:"site_url"`
+	Description  string     `json:"description"`
+	LastUpdated  *time.Time `json:"last_updated"`
+	LastError    *string    `json:"last_error"`
+	CreatedAt    time.Time  `json:"created_at"`
+	SortOrder    int64      `json:"sort_order"`
+	Etag         string     `json:"etag"`
+	LastModified string     `json:"last_modified"`
+	ErrorCount   int64      `json:"error_count"`
 }
 
 type Migration struct {

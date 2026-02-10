@@ -26,6 +26,7 @@ type Server struct {
 	TemplatesDir string
 	StaticDir    string
 	Version      string // used as cache-buster for static assets
+	PurgeDays    int    // articles older than this are filtered on fetch and purged
 	fetcher      *FeedFetcher
 }
 
@@ -140,10 +141,10 @@ func (s *Server) Serve(port string) error {
 	}
 
 	// Parse purge days setting (default 30 days, 0 to disable)
-	purgeDays := 30
+	s.PurgeDays = 30
 	if envPurge := os.Getenv("GORSS_PURGE_DAYS"); envPurge != "" {
 		if parsed, err := strconv.Atoi(envPurge); err == nil {
-			purgeDays = parsed
+			s.PurgeDays = parsed
 		}
 	}
 
@@ -154,10 +155,8 @@ func (s *Server) Serve(port string) error {
 	s.StartBackgroundRefresh(ctx, refreshInterval)
 
 	// Start auto-purge if enabled
-	if purgeDays > 0 {
-		slog.Info("starting auto-purge for old read articles", "days", purgeDays)
-		s.StartAutoPurge(ctx, purgeDays)
-	}
+	slog.Info("starting auto-purge for old read articles", "days", s.PurgeDays)
+	s.StartAutoPurge(ctx)
 
 	// Also do an initial refresh on startup
 	go s.refreshAllFeeds(ctx)

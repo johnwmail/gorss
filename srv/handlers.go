@@ -107,6 +107,12 @@ func (s *Server) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Filter out articles older than purge threshold on initial subscribe
+	if s.PurgeDays > 0 {
+		cutoff := time.Now().AddDate(0, 0, -s.PurgeDays)
+		result.Items = filterOldItems(result.Items, cutoff)
+	}
+
 	q := dbgen.New(s.DB)
 	feed, err := q.CreateFeed(r.Context(), dbgen.CreateFeedParams{
 		UserID:      userID,
@@ -128,15 +134,15 @@ func (s *Server) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 	// Store initial articles
 	for _, item := range result.Items {
 		_, _ = q.UpsertArticle(r.Context(), dbgen.UpsertArticleParams{
-				FeedID:      feed.ID,
-				Guid:        item.GUID,
-				Url:         item.URL,
-				Title:       item.Title,
-				Author:      item.Author,
-				Content:     item.Content,
-				Summary:     item.Summary,
-				PublishedAt: item.PublishedAt,
-			})
+			FeedID:      feed.ID,
+			Guid:        item.GUID,
+			Url:         item.URL,
+			Title:       item.Title,
+			Author:      item.Author,
+			Content:     item.Content,
+			Summary:     item.Summary,
+			PublishedAt: item.PublishedAt,
+		})
 	}
 
 	jsonResponse(w, feed)
@@ -576,7 +582,8 @@ func (s *Server) HandleMarkFeedRead(w http.ResponseWriter, r *http.Request) {
 
 // HandleRefresh triggers a feed refresh
 func (s *Server) HandleRefresh(w http.ResponseWriter, r *http.Request) {
-	go s.refreshAllFeeds(r.Context())
+	// Use background context — r.Context() is cancelled when the response is sent
+	go s.refreshAllFeeds(context.Background())
 	jsonResponse(w, map[string]string{"status": "refreshing"})
 }
 
@@ -747,6 +754,12 @@ func (s *Server) importSingleFeed(ctx context.Context, userID string, f FeedImpo
 	if err != nil {
 		slog.Warn("import feed fetch failed", "url", f.URL, "error", err)
 		return false
+	}
+
+	// Filter out articles older than purge threshold
+	if s.PurgeDays > 0 {
+		cutoff := time.Now().AddDate(0, 0, -s.PurgeDays)
+		result.Items = filterOldItems(result.Items, cutoff)
 	}
 
 	feed, err := q.CreateFeed(ctx, dbgen.CreateFeedParams{
