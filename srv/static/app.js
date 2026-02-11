@@ -12,7 +12,7 @@
 
   function isDaytime() {
     const hour = new Date().getHours();
-    return hour >= 6 && hour < 18; // 6 AM – 6 PM = day
+    return hour >= 6 && hour < 21; // 6 AM – 9 PM = day
   }
 
   function resolveTheme(mode) {
