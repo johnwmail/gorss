@@ -1,48 +1,51 @@
+x-common: &common
+  restart: unless-stopped
+  user: "8080:8080"
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  volumes:
+    - gorss-data:/data
+  tmpfs:
+    - /tmp:mode=1777,size=64M,noexec,nosuid
+  environment:
+    - GORSS_DB_PATH=/data/gorss.db
+    - GORSS_PORT=8080
+    - GORSS_REFRESH_INTERVAL=1h
+    - GORSS_PURGE_DAYS=30
+    - GORSS_AUTH_MODE=password    # Options: none, password, proxy
+    - GORSS_PASSWORD=gorss        # Required if AUTH_MODE=password
+    - TZ=UTC
+  healthcheck:
+    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+    interval: 30s
+    timeout: 3s
+    retries: 3
+    start_period: 10s
 
 services:
+  # Production: pulls from GHCR (default)
   gorss:
-    build: .
-    image: gorss:latest
+    <<: *common
+    image: ghcr.io/johnwmail/gorss:latest
     container_name: gorss
-    restart: unless-stopped
-    
-    # Run as non-root user
-    user: "8080:8080"
-    
-    # Security settings
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    
-    # Network
     ports:
       - "8080:8080"
-    
-    # Volumes - data is writable, tmpfs for temp files
-    volumes:
-      - gorss-data:/data
-    tmpfs:
-      - /tmp:mode=1777,size=64M,noexec,nosuid
-    
-    # Environment
-    environment:
-      - GORSS_DB_PATH=/data/gorss.db
-      - GORSS_PORT=8080
-      - GORSS_REFRESH_INTERVAL=1h
-      - GORSS_PURGE_DAYS=30
-      - GORSS_AUTH_MODE=password    # Options: none, password, proxy
-      - GORSS_PASSWORD=gorss        # Required if AUTH_MODE=password
-      - TZ=UTC
-    
-    # Health check
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
+
+  # Local build: docker compose --profile local up gorss-local
+  gorss-local:
+    <<: *common
+    profiles:
+      - local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gorss:local
+    container_name: gorss-local
+    ports:
+      - "8081:8080"
 
 volumes:
   gorss-data:
