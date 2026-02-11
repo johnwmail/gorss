@@ -46,12 +46,12 @@
   // Apply theme immediately (before DOM renders rest of page)
   applyTheme(resolveTheme(getThemeMode()));
 
-  // Re-check every minute for auto mode (catches the 6 AM / 6 PM transition)
+  // Re-check every 10 minutes for auto mode (catches the 6 AM / 9 PM transitions)
   setInterval(() => {
     if (getThemeMode() === 'auto') {
       applyTheme(resolveTheme('auto'));
     }
-  }, 60000);
+  }, 600000);
 
   // Custom confirm dialog (replaces native confirm())
   function showConfirm(message, title = 'Confirm') {
