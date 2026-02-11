@@ -51,6 +51,18 @@ make build
 sudo systemctl restart gorss
 ```
 
+## Theme (Day/Night Mode)
+
+GoRSS includes automatic day/night theme switching:
+
+- **Auto** (default): Uses device local time — 6 AM to 9 PM = light, otherwise dark. Re-checks every 10 minutes.
+- **Light**: Always light theme
+- **Dark**: Always dark theme
+
+Click the theme toggle button (🌗/☀️/🌙) in the sidebar footer to cycle modes. Your preference is saved in the browser's localStorage.
+
+The app also respects the OS-level `prefers-color-scheme` media query as a fallback to prevent flash of wrong theme on initial load.
+
 ## Environment Variables
 
 | Variable | Default | Description |

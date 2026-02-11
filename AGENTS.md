@@ -134,6 +134,17 @@ spec:
 | GORSS_PASSWORD | - | Password for `password` auth mode |
 | TZ | UTC | Timezone |
 
+## Theme (Day/Night Mode)
+
+- Auto mode uses device local time: 6 AM–9 PM = light, else dark
+- Manual override: auto → light → dark (cycle via sidebar footer button)
+- CSS custom properties (`--bg`, `--card-bg`, `--text`, etc.) drive all colors
+- `[data-theme="dark"]` selector overrides `:root` variables
+- `prefers-color-scheme: dark` media query prevents flash on load
+- Preference stored in `localStorage` key `gorss-theme-mode`
+- 10-minute interval re-checks for auto mode transitions
+- Smooth 0.3s CSS transition between themes
+
 ## Performance
 
 - **Gzip compression** on all responses

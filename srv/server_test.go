@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -982,6 +983,60 @@ func TestMarkAllReadByCategory(t *testing.T) {
 	if len(list) != 2 {
 		t.Errorf("expected 2 unread (from other-feed), got %d", len(list))
 	}
+}
+
+// --------------- Theme Support ---------------
+
+func TestThemeSupport(t *testing.T) {
+	s := newTestServer(t)
+
+	t.Run("CSS contains dark theme variables", func(t *testing.T) {
+		css, err := os.ReadFile(filepath.Join(s.StaticDir, "app.css"))
+		if err != nil {
+			t.Fatalf("read CSS: %v", err)
+		}
+		body := string(css)
+		if !strings.Contains(body, `[data-theme="dark"]`) {
+			t.Error("CSS should contain dark theme selector")
+		}
+		if !strings.Contains(body, "prefers-color-scheme: dark") {
+			t.Error("CSS should contain prefers-color-scheme media query")
+		}
+		if !strings.Contains(body, ".theme-toggle") {
+			t.Error("CSS should contain theme-toggle class")
+		}
+	})
+
+	t.Run("JS contains theme management", func(t *testing.T) {
+		js, err := os.ReadFile(filepath.Join(s.StaticDir, "app.js"))
+		if err != nil {
+			t.Fatalf("read JS: %v", err)
+		}
+		body := string(js)
+		if !strings.Contains(body, "gorss-theme-mode") {
+			t.Error("JS should contain theme localStorage key")
+		}
+		if !strings.Contains(body, "isDaytime") {
+			t.Error("JS should contain isDaytime function")
+		}
+		if !strings.Contains(body, "cycleTheme") {
+			t.Error("JS should contain cycleTheme function")
+		}
+		if !strings.Contains(body, "hour >= 6 && hour < 21") {
+			t.Error("JS should use 6 AM - 9 PM day range")
+		}
+	})
+
+	t.Run("HTML contains theme toggle button", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("GET", "/", "")
+		s.HandleRoot(w, r)
+		assertStatus(t, w, 200)
+		body := w.Body.String()
+		if !strings.Contains(body, "btn-theme") {
+			t.Error("HTML should contain theme toggle button")
+		}
+	})
 }
 
 // --------------- Import OPML ---------------
