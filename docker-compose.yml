@@ -45,7 +45,7 @@ services:
     image: gorss:local
     container_name: gorss-local
     ports:
-      - "8081:8080"
+      - "8080:8080"
 
 volumes:
   gorss-data:
