@@ -2,6 +2,57 @@
 (function() {
   'use strict';
 
+  // ── Theme Management ──────────────────────────────────────────────────
+  // Modes: 'auto' (time-based), 'light', 'dark'
+  const THEME_KEY = 'gorss-theme-mode';
+
+  function getThemeMode() {
+    return localStorage.getItem(THEME_KEY) || 'auto';
+  }
+
+  function isDaytime() {
+    const hour = new Date().getHours();
+    return hour >= 6 && hour < 18; // 6 AM – 6 PM = day
+  }
+
+  function resolveTheme(mode) {
+    if (mode === 'light') return 'light';
+    if (mode === 'dark') return 'dark';
+    // auto: use device local time
+    return isDaytime() ? 'light' : 'dark';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    // Update toggle button icon
+    const btn = document.getElementById('btn-theme');
+    if (btn) {
+      const mode = getThemeMode();
+      const icons = { auto: '🌗', light: '☀️', dark: '🌙' };
+      const labels = { auto: 'Auto (time-based)', light: 'Light mode', dark: 'Dark mode' };
+      btn.textContent = icons[mode];
+      btn.title = labels[mode];
+    }
+  }
+
+  function cycleTheme() {
+    const order = ['auto', 'light', 'dark'];
+    const current = getThemeMode();
+    const next = order[(order.indexOf(current) + 1) % order.length];
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(resolveTheme(next));
+  }
+
+  // Apply theme immediately (before DOM renders rest of page)
+  applyTheme(resolveTheme(getThemeMode()));
+
+  // Re-check every minute for auto mode (catches the 6 AM / 6 PM transition)
+  setInterval(() => {
+    if (getThemeMode() === 'auto') {
+      applyTheme(resolveTheme('auto'));
+    }
+  }, 60000);
+
   // Custom confirm dialog (replaces native confirm())
   function showConfirm(message, title = 'Confirm') {
     return new Promise(resolve => {
@@ -124,6 +175,9 @@
     // Mark all read
     document.getElementById('btn-mark-all-read')?.addEventListener('click', handleMarkAllRead);
     document.getElementById('btn-header-mark-read')?.addEventListener('click', handleMarkAllRead);
+
+    // Theme toggle
+    document.getElementById('btn-theme')?.addEventListener('click', cycleTheme);
 
     // Close modals
     document.querySelectorAll('.btn-cancel').forEach(btn => {
