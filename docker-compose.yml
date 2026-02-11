@@ -26,15 +26,17 @@ x-common: &common
     start_period: 10s
 
 services:
-  # Production: pulls from GHCR (default)
+  # Production: docker compose --profile prod up -d
   gorss:
     <<: *common
+    profiles:
+      - prod
     image: ghcr.io/johnwmail/gorss:latest
     container_name: gorss
     ports:
       - "8080:8080"
 
-  # Local build: docker compose --profile local up gorss-local
+  # Local build: docker compose --profile local up -d
   gorss-local:
     <<: *common
     profiles:
