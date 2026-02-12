@@ -24,41 +24,41 @@
   --mark-read-hover-bg: rgba(0,0,0,0.06);
 }
 
-/* Dark theme */
+/* Dark theme - soft/comfortable for night reading */
 [data-theme="dark"] {
-  --primary: #5b9ef4;
-  --primary-dark: #4a8de8;
-  --bg: #1a1a2e;
-  --card-bg: #16213e;
-  --text: #e0e0e0;
-  --text-muted: #8888a0;
-  --border: #2a2a4a;
-  --unread: #5b9ef4;
-  --shadow: rgba(0,0,0,0.3);
-  --shadow-hover: rgba(0,0,0,0.5);
-  --overlay: rgba(0,0,0,0.7);
-  --header-btn-hover: rgba(255,255,255,0.15);
-  --cat-hover: rgba(255,255,255,0.05);
-  --mark-read-hover-bg: rgba(255,255,255,0.08);
+  --primary: #7bafe8;
+  --primary-dark: #6a9fd8;
+  --bg: #2b2d31;
+  --card-bg: #36393f;
+  --text: #dcddde;
+  --text-muted: #96989d;
+  --border: #44474d;
+  --unread: #7bafe8;
+  --shadow: rgba(0,0,0,0.2);
+  --shadow-hover: rgba(0,0,0,0.35);
+  --overlay: rgba(0,0,0,0.6);
+  --header-btn-hover: rgba(255,255,255,0.12);
+  --cat-hover: rgba(255,255,255,0.04);
+  --mark-read-hover-bg: rgba(255,255,255,0.06);
 }
 
 /* Prevent flash of wrong theme on load - respect OS preference as fallback */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --primary: #5b9ef4;
-    --primary-dark: #4a8de8;
-    --bg: #1a1a2e;
-    --card-bg: #16213e;
-    --text: #e0e0e0;
-    --text-muted: #8888a0;
-    --border: #2a2a4a;
-    --unread: #5b9ef4;
-    --shadow: rgba(0,0,0,0.3);
-    --shadow-hover: rgba(0,0,0,0.5);
-    --overlay: rgba(0,0,0,0.7);
-    --header-btn-hover: rgba(255,255,255,0.15);
-    --cat-hover: rgba(255,255,255,0.05);
-    --mark-read-hover-bg: rgba(255,255,255,0.08);
+    --primary: #7bafe8;
+    --primary-dark: #6a9fd8;
+    --bg: #2b2d31;
+    --card-bg: #36393f;
+    --text: #dcddde;
+    --text-muted: #96989d;
+    --border: #44474d;
+    --unread: #7bafe8;
+    --shadow: rgba(0,0,0,0.2);
+    --shadow-hover: rgba(0,0,0,0.35);
+    --overlay: rgba(0,0,0,0.6);
+    --header-btn-hover: rgba(255,255,255,0.12);
+    --cat-hover: rgba(255,255,255,0.04);
+    --mark-read-hover-bg: rgba(255,255,255,0.06);
   }
 }
 
@@ -709,46 +709,46 @@ kbd {
 
 /* Dark theme specific overrides */
 [data-theme="dark"] .sidebar-header {
-  background: #0f3460;
+  background: #3b5998;
 }
 
 [data-theme="dark"] .main-header {
-  background: #0f3460;
+  background: #3b5998;
 }
 
 [data-theme="dark"] .article-feed {
-  background: #0f3460;
+  background: #4a6aa5;
 }
 
 [data-theme="dark"] .fab {
-  background: #0f3460;
+  background: #3b5998;
 }
 
 [data-theme="dark"] .header-mark-read {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.12);
 }
 
 [data-theme="dark"] .header-mark-read:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.22);
 }
 
 [data-theme="dark"] .btn-primary {
-  background: #0f3460;
-  color: #e0e0e0;
+  background: #4a6aa5;
+  color: #f0f0f0;
 }
 
 [data-theme="dark"] .btn-primary:hover {
-  background: #1a4a7a;
+  background: #5a7ab5;
 }
 
 [data-theme="dark"] .confirm-icon {
-  background: #0f3460;
+  background: #4a6aa5;
 }
 
 [data-theme="dark"] kbd {
-  background: #2a2a4a;
-  border-color: #3a3a5a;
-  color: #e0e0e0;
+  background: #3e4147;
+  border-color: #52555c;
+  color: #dcddde;
 }
 
 [data-theme="dark"] .article-btn {
@@ -769,11 +769,11 @@ kbd {
 }
 
 [data-theme="dark"] .nav-item.active {
-  background: rgba(91, 158, 244, 0.12);
+  background: rgba(123, 175, 232, 0.12);
 }
 
 [data-theme="dark"] .confirm-modal .btn-primary:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 /* Smooth theme transition */
