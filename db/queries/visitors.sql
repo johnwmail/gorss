@@ -74,6 +74,9 @@ UPDATE feeds SET
   error_count = ?
 WHERE id = ?;
 
+-- name: UpdateFeedDetails :exec
+UPDATE feeds SET title = ?, url = ? WHERE id = ? AND user_id = ?;
+
 -- name: DeleteFeed :exec
 DELETE FROM feeds WHERE id = ? AND user_id = ?;
 

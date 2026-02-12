@@ -103,6 +103,7 @@ func (s *Server) Serve(port string) error {
 	// API routes
 	mux.HandleFunc("GET /api/feeds", s.HandleGetFeeds)
 	mux.HandleFunc("POST /api/feeds", s.HandleSubscribe)
+	mux.HandleFunc("PUT /api/feeds/{id}", s.HandleUpdateFeed)
 	mux.HandleFunc("DELETE /api/feeds/{id}", s.HandleUnsubscribe)
 
 	mux.HandleFunc("GET /api/articles", s.HandleGetArticles)

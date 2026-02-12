@@ -347,6 +347,51 @@ body {
   flex: 1;
 }
 
+.main-title.editable {
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(255,255,255,0.4);
+  padding-bottom: 2px;
+}
+
+.main-title.editable:hover {
+  border-bottom-color: rgba(255,255,255,0.8);
+}
+
+/* Edit Feed Modal */
+.modal-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.modal-content input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 15px;
+  margin-bottom: 16px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.modal-content input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+}
+
+.modal-error {
+  color: #e53935;
+  font-size: 13px;
+  margin-bottom: 12px;
+  min-height: 18px;
+}
+
 .header-mark-read {
   background: rgba(255,255,255,0.2);
   border: none;
@@ -762,6 +807,7 @@ kbd {
 }
 
 [data-theme="dark"] .modal-content input[type="url"],
+[data-theme="dark"] .modal-content input[type="text"],
 [data-theme="dark"] .modal-content input[type="file"] {
   background: var(--bg);
   color: var(--text);

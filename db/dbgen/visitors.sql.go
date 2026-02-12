@@ -1272,6 +1272,27 @@ func (q *Queries) UpdateFeedCategory(ctx context.Context, arg UpdateFeedCategory
 	return err
 }
 
+const updateFeedDetails = `-- name: UpdateFeedDetails :exec
+UPDATE feeds SET title = ?, url = ? WHERE id = ? AND user_id = ?
+`
+
+type UpdateFeedDetailsParams struct {
+	Title  string `json:"title"`
+	Url    string `json:"url"`
+	ID     int64  `json:"id"`
+	UserID string `json:"user_id"`
+}
+
+func (q *Queries) UpdateFeedDetails(ctx context.Context, arg UpdateFeedDetailsParams) error {
+	_, err := q.db.ExecContext(ctx, updateFeedDetails,
+		arg.Title,
+		arg.Url,
+		arg.ID,
+		arg.UserID,
+	)
+	return err
+}
+
 const updateFeedMeta = `-- name: UpdateFeedMeta :exec
 UPDATE feeds SET
   title = ?,

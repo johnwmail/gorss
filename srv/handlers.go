@@ -148,6 +148,68 @@ func (s *Server) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, feed)
 }
 
+// HandleUpdateFeed updates a feed's title and/or URL
+func (s *Server) HandleUpdateFeed(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+	feedID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "invalid feed id", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Title string `json:"title"`
+		URL   string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	q := dbgen.New(s.DB)
+
+	// Get current feed to check ownership and compare URL
+	feed, err := q.GetFeed(r.Context(), dbgen.GetFeedParams{ID: feedID, UserID: userID})
+	if err != nil {
+		jsonError(w, "feed not found", http.StatusNotFound)
+		return
+	}
+
+	title := strings.TrimSpace(req.Title)
+	url := strings.TrimSpace(req.URL)
+	if title == "" {
+		title = feed.Title
+	}
+	if url == "" {
+		url = feed.Url
+	}
+
+	// If URL changed, validate it's a working feed
+	if url != feed.Url {
+		_, fetchErr := s.fetcher.Fetch(r.Context(), url)
+		if fetchErr != nil {
+			jsonError(w, "invalid feed URL: "+fetchErr.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := q.UpdateFeedDetails(r.Context(), dbgen.UpdateFeedDetailsParams{
+		Title:  title,
+		Url:    url,
+		ID:     feedID,
+		UserID: userID,
+	}); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			jsonError(w, "already subscribed to this URL", http.StatusConflict)
+			return
+		}
+		jsonError(w, "failed to update feed", http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
 // HandleUnsubscribe removes a feed subscription
 func (s *Server) HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	userID, _ := s.ensureUser(r)

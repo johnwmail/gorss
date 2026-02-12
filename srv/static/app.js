@@ -121,6 +121,7 @@
       console.log('Event listeners set up');
       setupKeyboardNav();
       console.log('Keyboard nav set up');
+      setupTitleEdit();
       // Load feeds, counts, and navigate in parallel for fast startup
       const [feedsOk] = await Promise.allSettled([
         loadFeeds(),
@@ -274,9 +275,11 @@
   function updateViewTitle() {
     const titles = { all: 'All Articles', fresh: 'Unread', starred: 'Starred' };
     let title = titles[currentView] || 'Articles';
+    let editable = false;
     if (currentFeedId) {
       const feed = feeds.find(f => f.id == currentFeedId);
       title = feed ? feed.title : 'Feed';
+      editable = true;
     }
     if (currentCategoryId !== null && currentCategoryId !== undefined) {
       if (currentCategoryId === 0) {
@@ -296,7 +299,92 @@
       const count = el ? parseInt(el.textContent) || 0 : 0;
       title += ` (${count})`;
     }
-    document.getElementById('current-view').textContent = title;
+    const titleEl = document.getElementById('current-view');
+    titleEl.textContent = title;
+    titleEl.classList.toggle('editable', editable);
+    titleEl.title = editable ? 'Click to rename feed' : '';
+  }
+
+  // Inline feed title editing
+  function setupTitleEdit() {
+    const titleEl = document.getElementById('current-view');
+    const modal = document.getElementById('modal-edit-feed');
+    const form = document.getElementById('form-edit-feed');
+    const nameInput = document.getElementById('edit-feed-name');
+    const urlInput = document.getElementById('edit-feed-url');
+    const errorEl = document.getElementById('edit-feed-error');
+
+    // Click title to open edit modal
+    titleEl.addEventListener('click', () => {
+      if (!titleEl.classList.contains('editable') || !currentFeedId) return;
+      const feed = feeds.find(f => f.id == currentFeedId);
+      if (!feed) return;
+
+      nameInput.value = feed.title || '';
+      urlInput.value = feed.url || '';
+      errorEl.textContent = '';
+      modal.classList.add('open');
+      nameInput.focus();
+      nameInput.select();
+    });
+
+    // Close modal
+    modal.querySelector('.btn-cancel').addEventListener('click', () => {
+      modal.classList.remove('open');
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.remove('open');
+    });
+
+    // Save
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const feed = feeds.find(f => f.id == currentFeedId);
+      if (!feed) return;
+
+      const newTitle = nameInput.value.trim();
+      const newUrl = urlInput.value.trim();
+      errorEl.textContent = '';
+
+      if (!newTitle) { errorEl.textContent = 'Name is required'; return; }
+      if (!newUrl) { errorEl.textContent = 'URL is required'; return; }
+
+      // Only send if something changed
+      if (newTitle === feed.title && newUrl === feed.url) {
+        modal.classList.remove('open');
+        return;
+      }
+
+      const saveBtn = form.querySelector('.btn-primary');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      try {
+        const body = {};
+        if (newTitle !== feed.title) body.title = newTitle;
+        if (newUrl !== feed.url) body.url = newUrl;
+
+        const res = await fetch(`/api/feeds/${currentFeedId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (res.ok) {
+          modal.classList.remove('open');
+          await loadFeeds();
+          updateViewTitle();
+        } else {
+          const err = await res.json();
+          errorEl.textContent = err.error || 'Failed to save';
+        }
+      } catch (err) {
+        errorEl.textContent = 'Network error';
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+      }
+    });
   }
 
   function navigateTo(view, feedId = null, categoryId = null) {
