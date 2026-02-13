@@ -97,6 +97,7 @@
   let categories = [];
   let selectedIndex = -1;
   let gKeyPressed = false;
+  let lastKnownCounts = { total: 0, unread: 0, starred: 0, feeds: {} };
 
   // DOM Elements
   const sidebar = document.getElementById('sidebar');
@@ -392,6 +393,7 @@
     currentFeedId = feedId;
     currentCategoryId = categoryId;
     selectedIndex = -1;
+    dismissNewArticlesBanner();
 
     // Update active state
     document.querySelectorAll('.nav-item').forEach(el => {
@@ -782,6 +784,46 @@
       const res = await fetch('/api/counts');
       const data = await res.json();
 
+      // Detect new articles by comparing with last known counts
+      const prevTotal = lastKnownCounts.total;
+      const newTotal = data.total || 0;
+      const prevUnread = lastKnownCounts.unread;
+      const newUnread = data.unread || 0;
+
+      // Check per-feed count increases for the current view
+      let newArticleCount = 0;
+      if (prevTotal > 0) { // Skip first load
+        if (currentFeedId && data.feeds) {
+          const prev = lastKnownCounts.feeds[String(currentFeedId)] || 0;
+          const now = data.feeds[String(currentFeedId)] || 0;
+          if (now > prev) newArticleCount = now - prev;
+        } else if (currentView === 'fresh' && newUnread > prevUnread) {
+          newArticleCount = newUnread - prevUnread;
+        } else if (currentView === 'all' && newTotal > prevTotal) {
+          newArticleCount = newTotal - prevTotal;
+        } else if (currentCategoryId !== null && data.feeds) {
+          // Sum feeds in this category
+          let prevCatTotal = 0, nowCatTotal = 0;
+          feeds.filter(f => (f.category_id || 0) == currentCategoryId).forEach(f => {
+            const id = String(f.id);
+            prevCatTotal += lastKnownCounts.feeds[id] || 0;
+            nowCatTotal += data.feeds[id] || 0;
+          });
+          if (nowCatTotal > prevCatTotal) newArticleCount = nowCatTotal - prevCatTotal;
+        }
+      }
+
+      // Save current counts
+      lastKnownCounts = {
+        total: newTotal,
+        unread: newUnread,
+        starred: data.starred || 0,
+        feeds: data.feeds ? { ...data.feeds } : {}
+      };
+
+      // Show banner if there are new articles
+      if (newArticleCount > 0) showNewArticlesBanner(newArticleCount);
+
       document.getElementById('count-all').textContent = data.total || 0;
       document.getElementById('count-fresh').textContent = data.unread || 0;
       document.getElementById('count-starred').textContent = data.starred || 0;
@@ -820,6 +862,45 @@
       console.error('Failed to update counts:', e);
     }
   }
+
+  // ── New Articles Banner ──────────────────────────────────────────
+  function showNewArticlesBanner(count) {
+    // Don't show if already visible
+    let banner = document.getElementById('new-articles-banner');
+    if (banner) {
+      // Update count on existing banner
+      const existing = parseInt(banner.dataset.count || '0');
+      const total = existing + count;
+      banner.dataset.count = total;
+      banner.textContent = `${total} new article${total !== 1 ? 's' : ''} — tap to refresh`;
+      return;
+    }
+
+    banner = document.createElement('div');
+    banner.id = 'new-articles-banner';
+    banner.className = 'new-articles-banner';
+    banner.dataset.count = count;
+    banner.textContent = `${count} new article${count !== 1 ? 's' : ''} — tap to refresh`;
+    banner.addEventListener('click', async () => {
+      banner.remove();
+      await loadArticles();
+      articlesList.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Insert at top of articles list
+    articlesList.insertBefore(banner, articlesList.firstChild);
+
+    // Slide in
+    requestAnimationFrame(() => banner.classList.add('visible'));
+  }
+
+  function dismissNewArticlesBanner() {
+    const banner = document.getElementById('new-articles-banner');
+    if (banner) banner.remove();
+  }
+
+  // Poll for new articles every 30 seconds
+  setInterval(() => updateCounts(), 30000);
 
   // Handlers
   async function handleAddFeed(e) {

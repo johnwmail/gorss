@@ -730,6 +730,37 @@ kbd {
 }
 
 /* Loading */
+/* New articles banner */
+.new-articles-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--primary);
+  color: white;
+  text-align: center;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  user-select: none;
+}
+
+.new-articles-banner.visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.new-articles-banner:hover {
+  filter: brightness(1.1);
+}
+
+[data-theme="dark"] .new-articles-banner {
+  background: #5b8dd9;
+}
+
 .loading {
   text-align: center;
   padding: 40px;
