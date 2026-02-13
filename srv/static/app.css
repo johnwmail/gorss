@@ -761,6 +761,13 @@ kbd {
   background: #5b8dd9;
 }
 
+.loading-more {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
 .loading {
   text-align: center;
   padding: 40px;

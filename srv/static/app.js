@@ -98,6 +98,10 @@
   let selectedIndex = -1;
   let gKeyPressed = false;
   let lastKnownCounts = { total: 0, unread: 0, starred: 0, feeds: {} };
+  let articlesOffset = 0;
+  let articlesLoading = false;
+  let articlesExhausted = false;
+  const ARTICLES_PAGE_SIZE = 100;
 
   // DOM Elements
   const sidebar = document.getElementById('sidebar');
@@ -188,11 +192,19 @@
       });
     });
 
-    // Scroll mark-as-read
+    // Scroll mark-as-read + infinite scroll
     let scrollTimeout = null;
     articlesList?.addEventListener('scroll', () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(handleScrollMarkRead, 300);
+
+      // Infinite scroll: load more when near bottom
+      if (!articlesLoading && !articlesExhausted) {
+        const { scrollTop, scrollHeight, clientHeight } = articlesList;
+        if (scrollHeight - scrollTop - clientHeight < 300) {
+          loadMoreArticles();
+        }
+      }
     });
 
     // Resize spacer on window resize
@@ -548,22 +560,94 @@
     </a>`;
   }
 
-  // Load articles
-  async function loadArticles() {
-    articlesList.innerHTML = '<div class="loading">Loading...</div>';
-
-    let url = '/api/articles?limit=100';
+  // Build the API URL for the current view
+  function buildArticlesUrl(limit, offset) {
+    let url = `/api/articles?limit=${limit}&offset=${offset}`;
     if (currentView === 'fresh') url += '&view=unread';
     else if (currentView === 'starred') url += '&view=starred';
     else if (currentCategoryId !== null) url += `&category_id=${currentCategoryId}&view=unread`;
     else if (currentFeedId) url += `&feed_id=${currentFeedId}`;
+    return url;
+  }
+
+  // Load articles (initial load, resets pagination)
+  async function loadArticles() {
+    articlesList.innerHTML = '<div class="loading">Loading...</div>';
+    articlesOffset = 0;
+    articlesExhausted = false;
 
     try {
-      const res = await fetch(url);
+      const res = await fetch(buildArticlesUrl(ARTICLES_PAGE_SIZE, 0));
       articles = await res.json();
+      articlesOffset = articles.length;
+      if (articles.length < ARTICLES_PAGE_SIZE) articlesExhausted = true;
       renderArticles();
     } catch (e) {
       articlesList.innerHTML = '<div class="loading">Failed to load articles</div>';
+    }
+  }
+
+  // Load more articles (infinite scroll)
+  async function loadMoreArticles() {
+    if (articlesLoading || articlesExhausted) return;
+    articlesLoading = true;
+
+    // Show loading indicator at bottom
+    const spacer = articlesList.querySelector('.scroll-spacer');
+    const loader = document.createElement('div');
+    loader.className = 'loading-more';
+    loader.textContent = 'Loading more...';
+    if (spacer) articlesList.insertBefore(loader, spacer);
+    else articlesList.appendChild(loader);
+
+    try {
+      const res = await fetch(buildArticlesUrl(ARTICLES_PAGE_SIZE, articlesOffset));
+      const newArticles = await res.json();
+
+      if (newArticles.length === 0) {
+        articlesExhausted = true;
+      } else {
+        // Append new articles, avoiding duplicates
+        const existingIds = new Set(articles.map(a => a.id));
+        const unique = newArticles.filter(a => !existingIds.has(a.id));
+        articles = articles.concat(unique);
+        articlesOffset += newArticles.length;
+        if (newArticles.length < ARTICLES_PAGE_SIZE) articlesExhausted = true;
+
+        // Append new article elements to the DOM (before spacer)
+        const fragment = document.createDocumentFragment();
+        unique.forEach((a, idx) => {
+          const i = articles.length - unique.length + idx;
+          const el = document.createElement('article');
+          el.className = `article${a.is_read ? '' : ' unread'}`;
+          el.dataset.index = i;
+          el.dataset.id = a.id;
+          el.innerHTML = `
+            <div class="article-header">
+              <div class="article-meta">
+                <span class="article-feed">${escapeHtml(a.feed_title || '')}</span>
+                <span class="article-time">${formatTime(a.published_at)}</span>
+                ${a.author ? `<span class="article-author">by ${escapeHtml(a.author)}</span>` : ''}
+                <span class="article-star${a.is_starred ? ' starred' : ''}" data-star="${a.id}">${a.is_starred ? '★' : '☆'}</span>
+              </div>
+              <div class="article-title">${escapeHtml(a.title)}</div>
+            </div>
+            <div class="article-content" id="content-${a.id}"></div>
+            <div class="article-actions">
+              <button class="article-btn" data-action="star" data-id="${a.id}">${a.is_starred ? '★ Unstar' : '☆ Star'}</button>
+              <button class="article-btn" data-action="read" data-id="${a.id}">${a.is_read ? '● Read' : '○ Unread'}</button>
+              <a class="article-btn" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">↗ Open</a>
+            </div>`;
+          fragment.appendChild(el);
+        });
+        if (spacer) articlesList.insertBefore(fragment, spacer);
+        else articlesList.appendChild(fragment);
+      }
+    } catch (e) {
+      console.error('Failed to load more articles:', e);
+    } finally {
+      loader.remove();
+      articlesLoading = false;
     }
   }
 
