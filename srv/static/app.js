@@ -942,6 +942,9 @@
 
       // Refresh header title after all counts are updated
       updateViewTitle();
+
+      // Update browser tab title with unread count
+      document.title = newUnread > 0 ? `GoRSS (${newUnread})` : 'GoRSS';
     } catch (e) {
       console.error('Failed to update counts:', e);
     }
