@@ -347,13 +347,13 @@ body {
   flex: 1;
 }
 
-.main-title.editable {
+.main-title #current-view.editable {
   cursor: pointer;
   border-bottom: 1px dashed rgba(255,255,255,0.4);
   padding-bottom: 2px;
 }
 
-.main-title.editable:hover {
+.main-title #current-view.editable:hover {
   border-bottom-color: rgba(255,255,255,0.8);
 }
 
@@ -730,35 +730,24 @@ kbd {
 }
 
 /* Loading */
-/* New articles banner */
-.new-articles-banner {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--primary);
-  color: white;
-  text-align: center;
-  padding: 10px 16px;
+/* New articles badge in header */
+.new-badge {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
+  color: rgba(255,255,255,0.85);
   cursor: pointer;
-  transform: translateY(-100%);
-  opacity: 0;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-  user-select: none;
+  white-space: nowrap;
+  animation: badge-pulse 0.3s ease;
 }
 
-.new-articles-banner.visible {
-  transform: translateY(0);
-  opacity: 1;
+.new-badge:hover {
+  color: #fff;
+  text-decoration: underline;
 }
 
-.new-articles-banner:hover {
-  filter: brightness(1.1);
-}
-
-[data-theme="dark"] .new-articles-banner {
-  background: #5b8dd9;
+@keyframes badge-pulse {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 .loading-more {

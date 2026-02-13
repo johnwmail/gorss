@@ -950,40 +950,27 @@
     }
   }
 
-  // ── New Articles Banner ──────────────────────────────────────────
+  // ── New Articles Badge (header) ────────────────────────────────
+  const newBadge = document.getElementById('new-badge');
+  let pendingNewCount = 0;
+
+  newBadge.addEventListener('click', async () => {
+    pendingNewCount = 0;
+    newBadge.style.display = 'none';
+    await loadArticles();
+    articlesList.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
   function showNewArticlesBanner(count) {
-    // Don't show if already visible
-    let banner = document.getElementById('new-articles-banner');
-    if (banner) {
-      // Update count on existing banner
-      const existing = parseInt(banner.dataset.count || '0');
-      const total = existing + count;
-      banner.dataset.count = total;
-      banner.textContent = `${total} new article${total !== 1 ? 's' : ''} — tap to refresh`;
-      return;
-    }
-
-    banner = document.createElement('div');
-    banner.id = 'new-articles-banner';
-    banner.className = 'new-articles-banner';
-    banner.dataset.count = count;
-    banner.textContent = `${count} new article${count !== 1 ? 's' : ''} — tap to refresh`;
-    banner.addEventListener('click', async () => {
-      banner.remove();
-      await loadArticles();
-      articlesList.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-
-    // Insert at top of articles list
-    articlesList.insertBefore(banner, articlesList.firstChild);
-
-    // Slide in
-    requestAnimationFrame(() => banner.classList.add('visible'));
+    pendingNewCount += count;
+    newBadge.textContent = ` · +${pendingNewCount} new`;
+    newBadge.title = 'Click to refresh';
+    newBadge.style.display = 'inline';
   }
 
   function dismissNewArticlesBanner() {
-    const banner = document.getElementById('new-articles-banner');
-    if (banner) banner.remove();
+    pendingNewCount = 0;
+    newBadge.style.display = 'none';
   }
 
   // Poll for new articles every 30 seconds
