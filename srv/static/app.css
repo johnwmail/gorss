@@ -482,7 +482,7 @@ body {
 }
 
 .article.unread .article-title {
-  font-weight: 600;
+  color: var(--unread);
 }
 
 .article-actions {
