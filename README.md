@@ -84,34 +84,98 @@ The app also respects the OS-level `prefers-color-scheme` media query as a fallb
 - **password**: Single password protection, good for personal/family use
 - **proxy**: Uses exe.dev proxy headers (X-ExeDev-UserID) for multi-user support
 
+## Database Backup & Restore
+
+GoRSS supports automatic periodic backups and manual backup/restore via CLI.
+
+### Automatic Periodic Backup
+
+Set `GORSS_BACKUP_DIR` to enable. Backups run every `GORSS_BACKUP_INTERVAL` (default 24h), keeping the most recent `GORSS_BACKUP_KEEP` copies (default 7).
+
+```bash
+# systemd / bare metal
+export GORSS_BACKUP_DIR=/home/exedev/gorss/data/backups
+./gorss
+
+# Docker — backups go inside the data volume at /data/backups
+# Already configured in docker-compose.yml
+```
+
+For Docker, to keep backups on the host (survives volume deletion):
+
+```yaml
+volumes:
+  - gorss-data:/data
+  - /host/path/backups:/backups
+environment:
+  - GORSS_BACKUP_DIR=/backups
+```
+
+### Manual One-Time Backup
+
+```bash
+./gorss -backup /path/to/backup/dir
+# Output: Backup saved to: /path/to/backup/dir/gorss-2026-02-16-030000.db
+```
+
+### Restore from Backup
+
+```bash
+# Stop the server first!
+sudo systemctl stop gorss
+
+# Restore (interactive confirmation)
+./gorss -restore /path/to/backup/gorss-2026-02-16-030000.db
+
+# Restart
+sudo systemctl start gorss
+```
+
+The restore command validates the backup is a real SQLite database and automatically cleans up stale WAL/SHM files.
+
+### Clone / Migrate to Another Server
+
+Since the entire app state is one SQLite file, migration is trivial:
+
+```bash
+scp /backups/gorss-latest.db new-server:/data/gorss.db
+# On new server:
+GORSS_DB_PATH=/data/gorss.db ./gorss
+```
+
 ## Database
 
-Uses SQLite (`db.sqlite3`). SQL queries are managed with sqlc.
+Uses SQLite with WAL mode. SQL queries are managed with sqlc.
 
 ## Code Layout
 
 ```
 gorss/
 ├── cmd/srv/
-│   └── main.go              # Entry point
+│   └── main.go              # Entry point, CLI flags (--backup, --restore)
 ├── srv/
 │   ├── server.go            # HTTP server, routes, middleware
 │   ├── handlers.go          # API request handlers
-│   ├── feed.go              # RSS/Atom feed fetching & parsing
+│   ├── feed.go              # RSS/Atom feed fetching, parsing & background jobs
 │   ├── auth.go              # Authentication (password/proxy modes)
 │   ├── opml.go              # OPML import/export
 │   ├── server_test.go       # Tests
 │   ├── static/
 │   │   ├── app.css          # Stylesheet
-│   │   └── app.js           # Frontend JavaScript
+│   │   ├── app.js           # Frontend JavaScript
+│   │   ├── favicon.svg      # Favicon (SVG)
+│   │   └── favicon.ico      # Favicon (ICO fallback)
 │   └── templates/
 │       ├── app.html         # Main app template
 │       └── welcome.html     # Login page template
 ├── db/
 │   ├── db.go               # Database open & migration runner
+│   ├── backup.go           # Backup, restore & prune functions
+│   ├── backup_test.go      # Backup/restore tests
 │   ├── migrations/
 │   │   ├── 001-base.sql     # Initial schema
-│   │   └── 002-sort-order.sql
+│   │   ├── 002-sort-order.sql
+│   │   └── 003-feed-caching.sql  # ETag/Last-Modified/error_count
 │   ├── queries/
 │   │   └── visitors.sql     # sqlc query definitions
 │   ├── dbgen/               # sqlc generated code

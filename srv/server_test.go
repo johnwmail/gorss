@@ -1039,6 +1039,73 @@ func TestThemeSupport(t *testing.T) {
 	})
 }
 
+// --------------- Update Feed ---------------
+
+func TestUpdateFeed(t *testing.T) {
+	s := newTestServer(t)
+	feed := seedFeed(t, s, "update-test", nil, 2)
+	fidStr := fmt.Sprint(feed.ID)
+
+	t.Run("rename feed", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("PUT", "/api/feeds/"+fidStr, `{"title":"New Name"}`)
+		r.SetPathValue("id", fidStr)
+		s.HandleUpdateFeed(w, r)
+		assertStatus(t, w, 200)
+
+		// Verify the feed was actually renamed in the DB
+		q := dbgen.New(s.DB)
+		updated, err := q.GetFeed(context.Background(), dbgen.GetFeedParams{ID: feed.ID, UserID: "testuser"})
+		if err != nil {
+			t.Fatalf("get feed: %v", err)
+		}
+		if updated.Title != "New Name" {
+			t.Errorf("title = %q, want New Name", updated.Title)
+		}
+	})
+
+	t.Run("empty title keeps current", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("PUT", "/api/feeds/"+fidStr, `{"title":""}`)
+		r.SetPathValue("id", fidStr)
+		s.HandleUpdateFeed(w, r)
+		assertStatus(t, w, 200) // empty title defaults to current
+
+		q := dbgen.New(s.DB)
+		updated, err := q.GetFeed(context.Background(), dbgen.GetFeedParams{ID: feed.ID, UserID: "testuser"})
+		if err != nil {
+			t.Fatalf("get feed: %v", err)
+		}
+		if updated.Title != "New Name" { // kept from previous test
+			t.Errorf("title = %q, want New Name (unchanged)", updated.Title)
+		}
+	})
+
+	t.Run("invalid id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("PUT", "/api/feeds/abc", `{"title":"X"}`)
+		r.SetPathValue("id", "abc")
+		s.HandleUpdateFeed(w, r)
+		assertStatus(t, w, 400)
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("PUT", "/api/feeds/"+fidStr, "not json")
+		r.SetPathValue("id", fidStr)
+		s.HandleUpdateFeed(w, r)
+		assertStatus(t, w, 400)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := authReq("PUT", "/api/feeds/999999", `{"title":"X"}`)
+		r.SetPathValue("id", "999999")
+		s.HandleUpdateFeed(w, r)
+		assertStatus(t, w, 404)
+	})
+}
+
 // --------------- Import OPML ---------------
 
 func TestImportOPML(t *testing.T) {

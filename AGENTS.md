@@ -26,23 +26,30 @@ GoRSS is a web-based RSS/Atom feed reader that replicates the core functionality
 ```
 gorss/
 ├── cmd/srv/
-│   └── main.go              # Entry point
+│   └── main.go              # Entry point, CLI flags (--backup, --restore)
 ├── srv/
 │   ├── server.go            # HTTP server, routes, middleware
 │   ├── handlers.go          # API request handlers
-│   ├── feed.go              # RSS/Atom feed fetching & parsing
+│   ├── feed.go              # RSS/Atom feed fetching, parsing & background jobs
 │   ├── auth.go              # Authentication (password/proxy modes)
 │   ├── opml.go              # OPML import/export
 │   ├── server_test.go       # Tests
 │   ├── static/
 │   │   ├── app.css          # Stylesheet
-│   │   └── app.js           # Frontend JavaScript
+│   │   ├── app.js           # Frontend JavaScript
+│   │   ├── favicon.svg      # Favicon (SVG)
+│   │   └── favicon.ico      # Favicon (ICO fallback)
 │   └── templates/
 │       ├── app.html         # Main app template
 │       └── welcome.html     # Login page template
 ├── db/
 │   ├── db.go               # Database open & migration runner
+│   ├── backup.go           # Backup, restore & prune functions
+│   ├── backup_test.go      # Backup/restore tests
 │   ├── migrations/          # SQL schema migrations
+│   │   ├── 001-base.sql
+│   │   ├── 002-sort-order.sql
+│   │   └── 003-feed-caching.sql  # ETag/Last-Modified/error_count
 │   ├── queries/             # sqlc query definitions
 │   ├── dbgen/               # sqlc generated code
 │   └── sqlc.yaml            # sqlc config
@@ -148,6 +155,22 @@ spec:
 - 10-minute interval re-checks for auto mode transitions
 - Smooth 0.3s CSS transition between themes
 
+## Feed Fetching
+
+- **HTTP conditional GET**: Sends `If-None-Match` (ETag) and `If-Modified-Since` headers; skips parsing/upserting on `304 Not Modified`
+- **Article age filtering**: Articles older than `GORSS_PURGE_DAYS` are skipped at ingestion (subscribe, import, refresh)
+- **Error backoff**: Feeds with consecutive errors get exponential backoff (2h → 4h → 8h → 24h cap); resets on success
+- **Background refresh**: Goroutine refreshes all feeds every `GORSS_REFRESH_INTERVAL`
+
+## Database Backup & Restore
+
+- **Periodic backup**: Set `GORSS_BACKUP_DIR` to enable; backs up every `GORSS_BACKUP_INTERVAL` (default 24h)
+- **Prune old backups**: Keeps `GORSS_BACKUP_KEEP` (default 7) most recent copies
+- **CLI backup**: `gorss --backup /path/to/dir` for one-time backup
+- **CLI restore**: `gorss --restore /path/to/backup.db` with validation and WAL/SHM cleanup
+- Uses SQLite `VACUUM INTO` for safe online backup (no locking, no downtime)
+- Backup files are portable — copy to clone/migrate the entire app
+
 ## Performance
 
 - **Gzip compression** on all responses
@@ -155,6 +178,8 @@ spec:
 - **Cache-Control** headers for static assets
 - **Batch mark-read API** to avoid SQLite write contention
 - **SQLite WAL mode** + 5s busy timeout for concurrent read/write
+- **Infinite scroll** — articles load in pages of 100, next page fetched automatically
+- **New articles badge** — polls counts every 30s, shows · +N new inline in header
 
 ## Authentication Modes
 
