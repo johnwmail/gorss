@@ -55,7 +55,7 @@ func run() error {
 		fmt.Println("Make sure the GoRSS server is stopped before restoring.")
 		fmt.Print("Continue? [y/N] ")
 		var answer string
-		fmt.Scanln(&answer)
+		_, _ = fmt.Scanln(&answer)
 		if answer != "y" && answer != "Y" {
 			fmt.Println("Restore cancelled.")
 			return nil
@@ -73,7 +73,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer srcDB.Close()
+		defer srcDB.Close() //nolint:errcheck
 		path, err := db.Backup(srcDB, *flagBackup)
 		if err != nil {
 			return fmt.Errorf("backup failed: %w", err)
