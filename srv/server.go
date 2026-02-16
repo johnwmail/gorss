@@ -246,6 +246,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	// Get categories
 	categories, _ := q.GetCategories(r.Context(), userID)
 
+	authMode := GetAuthMode()
 	data := map[string]any{
 		"Version":      s.Version,
 		"Hostname":     s.Hostname,
@@ -255,6 +256,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 		"StarredCount": starredCount,
 		"Feeds":        feeds,
 		"Categories":   categories,
+		"AuthMode":     string(authMode),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

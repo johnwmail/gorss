@@ -209,36 +209,79 @@ func (s *Server) renderLoginPage(w http.ResponseWriter, errorMsg string) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GoRSS - Login</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f5;
+      --card-bg: white;
+      --text: #333;
+      --text-muted: #666;
+      --primary: #1a73e8;
+      --primary-hover: #1557b0;
+      --border: #e0e0e0;
+      --shadow: rgba(0,0,0,0.1);
+      --error-bg: #ffebee;
+      --error-text: #c62828;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #2b2d31;
+        --card-bg: #36393f;
+        --text: #dcddde;
+        --text-muted: #999;
+        --primary: #7bafe8;
+        --primary-hover: #6a9fd8;
+        --border: #4a4d52;
+        --shadow: rgba(0,0,0,0.3);
+        --error-bg: #442222;
+        --error-text: #ff6b6b;
+      }
+    }
+    [data-theme="dark"] {
+      --bg: #2b2d31;
+      --card-bg: #36393f;
+      --text: #dcddde;
+      --text-muted: #999;
+      --primary: #7bafe8;
+      --primary-hover: #6a9fd8;
+      --border: #4a4d52;
+      --shadow: rgba(0,0,0,0.3);
+      --error-bg: #442222;
+      --error-text: #ff6b6b;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f5f5f5;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: background 0.3s, color 0.3s;
     }
     .login-box {
-      background: white;
+      background: var(--card-bg);
       padding: 40px;
       border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 20px var(--shadow);
       width: 100%;
       max-width: 400px;
+      transition: background 0.3s;
     }
     h1 {
-      color: #1a73e8;
+      color: var(--primary);
       margin-bottom: 8px;
       font-size: 28px;
     }
     .subtitle {
-      color: #666;
+      color: var(--text-muted);
       margin-bottom: 24px;
     }
     .error {
-      background: #ffebee;
-      color: #c62828;
+      background: var(--error-bg);
+      color: var(--error-text);
       padding: 12px;
       border-radius: 8px;
       margin-bottom: 16px;
@@ -246,20 +289,22 @@ func (s *Server) renderLoginPage(w http.ResponseWriter, errorMsg string) {
     input[type="password"] {
       width: 100%;
       padding: 14px;
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--border);
       border-radius: 8px;
       font-size: 16px;
       margin-bottom: 16px;
       transition: border-color 0.2s;
+      background: var(--bg);
+      color: var(--text);
     }
     input[type="password"]:focus {
       outline: none;
-      border-color: #1a73e8;
+      border-color: var(--primary);
     }
     button {
       width: 100%;
       padding: 14px;
-      background: #1a73e8;
+      background: var(--primary);
       color: white;
       border: none;
       border-radius: 8px;
@@ -269,7 +314,7 @@ func (s *Server) renderLoginPage(w http.ResponseWriter, errorMsg string) {
       transition: background 0.2s;
     }
     button:hover {
-      background: #1557b0;
+      background: var(--primary-hover);
     }
   </style>
 </head>
@@ -283,6 +328,18 @@ func (s *Server) renderLoginPage(w http.ResponseWriter, errorMsg string) {
       <button type="submit">Login</button>
     </form>
   </div>
+  <script>
+    // Respect the same theme preference as the main app
+    (function() {
+      var mode = localStorage.getItem('gorss-theme-mode') || 'auto';
+      if (mode === 'dark') { document.documentElement.dataset.theme = 'dark'; }
+      else if (mode === 'light') { document.documentElement.dataset.theme = 'light'; }
+      else {
+        var hour = new Date().getHours();
+        if (hour < 6 || hour >= 21) { document.documentElement.dataset.theme = 'dark'; }
+      }
+    })();
+  </script>
 </body>
 </html>`
 	_, _ = w.Write([]byte(html))

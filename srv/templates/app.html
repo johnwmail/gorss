@@ -49,6 +49,9 @@
         <button id="btn-refresh" class="btn-icon" title="Refresh Feeds">🔄</button>
         <button id="btn-mark-all-read" class="btn-icon" title="Mark All Read">✓</button>
         <button id="btn-theme" class="theme-toggle" title="Toggle theme (auto/light/dark)">🌙</button>
+        {{if or (eq .AuthMode "password") (eq .AuthMode "proxy")}}
+        <a href="/logout" id="btn-logout" class="btn-icon" title="Logout">🚪</a>
+        {{end}}
       </div>
     </aside>
 
