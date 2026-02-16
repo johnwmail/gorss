@@ -71,6 +71,9 @@ The app also respects the OS-level `prefers-color-scheme` media query as a fallb
 | GORSS_PORT | 8080 | Port number to listen on |
 | GORSS_REFRESH_INTERVAL | 1h | Feed refresh interval (e.g., 30m, 1h, 2h) |
 | GORSS_PURGE_DAYS | 30 | Auto-purge read articles older than X days (0 to disable) |
+| GORSS_BACKUP_DIR | - | Directory for periodic backups (disabled if unset) |
+| GORSS_BACKUP_INTERVAL | 24h | Backup interval (e.g., 12h, 24h) |
+| GORSS_BACKUP_KEEP | 7 | Number of backup files to keep |
 | GORSS_AUTH_MODE | none | Authentication mode: `none`, `password`, or `proxy` |
 | GORSS_PASSWORD | - | Password for `password` auth mode |
 | TZ | UTC | Timezone |

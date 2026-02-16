@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
+	"github.com/johnwmail/gorss/db"
 	"github.com/johnwmail/gorss/db/dbgen"
 )
 
@@ -361,4 +362,41 @@ func (s *Server) purgeOldArticles() {
 
 	deleted, _ := result.RowsAffected()
 	slog.Info("purged old read articles", "count", deleted, "cutoff_days", s.PurgeDays)
+}
+
+// StartPeriodicBackup starts a goroutine that backs up the database periodically.
+func (s *Server) StartPeriodicBackup(ctx context.Context, backupDir string, interval time.Duration, keep int) {
+	// Run an initial backup shortly after startup
+	go func() {
+		select {
+		case <-time.After(30 * time.Second):
+		case <-ctx.Done():
+			return
+		}
+		s.runBackup(backupDir, keep)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				s.runBackup(backupDir, keep)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (s *Server) runBackup(backupDir string, keep int) {
+	path, err := db.Backup(s.DB, backupDir)
+	if err != nil {
+		slog.Error("database backup failed", "error", err)
+		return
+	}
+	slog.Info("database backup complete", "path", path)
+
+	if err := db.PruneBackups(backupDir, keep); err != nil {
+		slog.Warn("backup pruning failed", "error", err)
+	}
 }

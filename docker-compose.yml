@@ -17,6 +17,8 @@ x-common: &common
     - GORSS_PURGE_DAYS=30
     - GORSS_AUTH_MODE=password    # Options: none, password, proxy
     - GORSS_PASSWORD=gorss        # Required if AUTH_MODE=password
+    - GORSS_BACKUP_DIR=/data/backups
+    - GORSS_BACKUP_KEEP=7
     - TZ=UTC
   healthcheck:
     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]

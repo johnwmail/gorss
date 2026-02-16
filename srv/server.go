@@ -162,6 +162,24 @@ func (s *Server) Serve(port string) error {
 	// Also do an initial refresh on startup
 	go s.refreshAllFeeds(ctx)
 
+	// Start periodic backup if configured
+	if backupDir := os.Getenv("GORSS_BACKUP_DIR"); backupDir != "" {
+		backupKeep := 7
+		if envKeep := os.Getenv("GORSS_BACKUP_KEEP"); envKeep != "" {
+			if parsed, err := strconv.Atoi(envKeep); err == nil && parsed > 0 {
+				backupKeep = parsed
+			}
+		}
+		backupInterval := 24 * time.Hour
+		if envInt := os.Getenv("GORSS_BACKUP_INTERVAL"); envInt != "" {
+			if parsed, err := time.ParseDuration(envInt); err == nil && parsed >= time.Minute {
+				backupInterval = parsed
+			}
+		}
+		slog.Info("starting periodic database backup", "dir", backupDir, "interval", backupInterval, "keep", backupKeep)
+		s.StartPeriodicBackup(ctx, backupDir, backupInterval, backupKeep)
+	}
+
 	// Apply auth middleware
 	authMode := GetAuthMode()
 	slog.Info("starting server", "addr", addr, "auth_mode", authMode)
