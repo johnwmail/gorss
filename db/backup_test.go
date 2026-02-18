@@ -312,3 +312,73 @@ func TestLatestBackupAge_PicksNewest(t *testing.T) {
 		t.Fatalf("expected age ~1m, got %v", age)
 	}
 }
+
+func TestLatestBackupAge_SkipsCorrupt(t *testing.T) {
+	dir := t.TempDir()
+
+	// Most recent file is corrupt (not a real SQLite DB)
+	recent := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	if err := os.WriteFile(
+		filepath.Join(dir, fmt.Sprintf("gorss-%s.db", recent)),
+		[]byte("not a sqlite db"),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// No other backups exist — should return max duration
+	age := LatestBackupAge(dir)
+	if age < 24*time.Hour {
+		t.Fatalf("expected very large age when only backup is corrupt, got %v", age)
+	}
+}
+
+func TestLatestBackupAge_SkipsCorruptFallsBackToValid(t *testing.T) {
+	db, _ := newTestDB(t)
+	dir := t.TempDir()
+
+	// Create a real valid backup ~3 minutes ago
+	oldTS := time.Now().Add(-3 * time.Minute).Format("2006-01-02-150405")
+	oldPath := filepath.Join(dir, fmt.Sprintf("gorss-%s.db", oldTS))
+	if _, err := db.Exec("VACUUM INTO ?", oldPath); err != nil {
+		t.Fatalf("create valid backup: %v", err)
+	}
+
+	// Most recent file is corrupt
+	newTS := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	if err := os.WriteFile(
+		filepath.Join(dir, fmt.Sprintf("gorss-%s.db", newTS)),
+		[]byte("garbage"),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	age := LatestBackupAge(dir)
+	// Should fall back to the valid backup (~3 min old)
+	if age > 10*time.Minute {
+		t.Fatalf("expected age ~3m (fell back to valid backup), got %v", age)
+	}
+	if age < 2*time.Minute {
+		t.Fatalf("expected age ~3m, got %v (should not have used corrupt file)", age)
+	}
+}
+
+func TestLatestBackupAge_SkipsEmptyFile(t *testing.T) {
+	dir := t.TempDir()
+
+	// Recent but empty file
+	ts := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	if err := os.WriteFile(
+		filepath.Join(dir, fmt.Sprintf("gorss-%s.db", ts)),
+		[]byte{},
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	age := LatestBackupAge(dir)
+	if age < 24*time.Hour {
+		t.Fatalf("expected very large age when only backup is empty, got %v", age)
+	}
+}

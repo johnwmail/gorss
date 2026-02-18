@@ -11,15 +11,33 @@ import (
 	"time"
 )
 
-// LatestBackupAge returns the age of the most recent backup file in the
-// directory, or a very large duration if no backups exist.
+const maxDuration = time.Duration(1<<63 - 1)
+
+// LatestBackupAge returns the age of the most recent valid backup in the
+// directory, or a very large duration if no valid backups exist.
+// A backup is considered valid only if its filename timestamp parses correctly,
+// the file is non-empty, and it can be opened and pinged as a SQLite database.
 func LatestBackupAge(backupDir string) time.Duration {
+	age, _ := latestValidBackup(backupDir)
+	return age
+}
+
+// latestValidBackup finds the most recent backup file (by filename timestamp),
+// validates it is a real SQLite database, and returns its age and path.
+// If no valid backup is found, age is maxDuration and path is empty.
+func latestValidBackup(backupDir string) (time.Duration, string) {
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
-		return time.Duration(1<<63 - 1) // max duration — treat as "no backup"
+		return maxDuration, ""
 	}
 
-	var latest time.Time
+	// Collect and sort backup filenames newest-first so we can validate
+	// the most recent ones first and return early.
+	type candidate struct {
+		name string
+		ts   time.Time
+	}
+	var candidates []candidate
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -28,22 +46,47 @@ func LatestBackupAge(backupDir string) time.Duration {
 		if !strings.HasPrefix(name, "gorss-") || !strings.HasSuffix(name, ".db") {
 			continue
 		}
-		// Parse timestamp from filename: gorss-2006-01-02-150405.db
 		ts := strings.TrimPrefix(name, "gorss-")
 		ts = strings.TrimSuffix(ts, ".db")
 		t, err := time.Parse("2006-01-02-150405", ts)
 		if err != nil {
 			continue
 		}
-		if t.After(latest) {
-			latest = t
-		}
+		candidates = append(candidates, candidate{name, t})
 	}
 
-	if latest.IsZero() {
-		return time.Duration(1<<63 - 1)
+	// Sort newest first
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].ts.After(candidates[j].ts)
+	})
+
+	for _, c := range candidates {
+		path := filepath.Join(backupDir, c.name)
+
+		// Check file is non-empty
+		info, err := os.Stat(path)
+		if err != nil || info.Size() == 0 {
+			slog.Warn("backup file empty or unreadable, skipping", "file", c.name)
+			continue
+		}
+
+		// Validate it's a real SQLite database
+		testDB, err := sql.Open("sqlite", path+"?mode=ro")
+		if err != nil {
+			slog.Warn("backup file cannot be opened as SQLite, skipping", "file", c.name, "error", err)
+			continue
+		}
+		err = testDB.Ping()
+		_ = testDB.Close()
+		if err != nil {
+			slog.Warn("backup file failed SQLite ping, skipping", "file", c.name, "error", err)
+			continue
+		}
+
+		return time.Since(c.ts), path
 	}
-	return time.Since(latest)
+
+	return maxDuration, ""
 }
 
 // Backup creates a copy of the database using SQLite's built-in backup mechanism.
