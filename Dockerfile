@@ -28,7 +28,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o gorss \
   ./cmd/srv
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:latest
 
 WORKDIR /app
 
@@ -48,8 +48,10 @@ RUN deluser gorss 2>/dev/null || true && \
     addgroup -g 8080 gorss && \
     adduser -u 8080 -G gorss -h /app -D gorss
 
-# Create data directory for SQLite and set permissions
-RUN mkdir -p /data && chown -R 8080:8080 /data /app
+# Ensure binary is executable and all files readable by gorss user
+RUN chmod 755 /app/gorss && \
+    chmod -R a+rX /app/srv && \
+    mkdir -p /data && chown 8080:8080 /data
 
 # Switch to non-root user
 USER 8080:8080
@@ -69,4 +71,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run
-CMD ["./gorss"]
+CMD ["/app/gorss"]
