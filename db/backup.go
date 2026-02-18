@@ -11,6 +11,41 @@ import (
 	"time"
 )
 
+// LatestBackupAge returns the age of the most recent backup file in the
+// directory, or a very large duration if no backups exist.
+func LatestBackupAge(backupDir string) time.Duration {
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return time.Duration(1<<63 - 1) // max duration — treat as "no backup"
+	}
+
+	var latest time.Time
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasPrefix(name, "gorss-") || !strings.HasSuffix(name, ".db") {
+			continue
+		}
+		// Parse timestamp from filename: gorss-2006-01-02-150405.db
+		ts := strings.TrimPrefix(name, "gorss-")
+		ts = strings.TrimSuffix(ts, ".db")
+		t, err := time.Parse("2006-01-02-150405", ts)
+		if err != nil {
+			continue
+		}
+		if t.After(latest) {
+			latest = t
+		}
+	}
+
+	if latest.IsZero() {
+		return time.Duration(1<<63 - 1)
+	}
+	return time.Since(latest)
+}
+
 // Backup creates a copy of the database using SQLite's built-in backup mechanism.
 // The backup file is named gorss-YYYY-MM-DD-HHMMSS.db in the given directory.
 func Backup(srcDB *sql.DB, backupDir string) (string, error) {

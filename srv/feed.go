@@ -365,15 +365,27 @@ func (s *Server) purgeOldArticles() {
 }
 
 // StartPeriodicBackup starts a goroutine that backs up the database periodically.
+// On startup it checks the age of the most recent backup and only runs one if
+// the interval has already elapsed — this prevents duplicate backups when the
+// container or process restarts within the same backup period.
 func (s *Server) StartPeriodicBackup(ctx context.Context, backupDir string, interval time.Duration, keep int) {
-	// Run an initial backup shortly after startup
 	go func() {
+		// Wait a moment for the server to settle.
 		select {
 		case <-time.After(30 * time.Second):
 		case <-ctx.Done():
 			return
 		}
-		s.runBackup(backupDir, keep)
+
+		// Check how long until the next backup is actually due.
+		age := db.LatestBackupAge(backupDir)
+		if age >= interval {
+			s.runBackup(backupDir, keep)
+		} else {
+			slog.Info("skipping startup backup — recent backup exists",
+				"age", age.Round(time.Minute),
+				"interval", interval)
+		}
 
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()

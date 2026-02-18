@@ -2,9 +2,11 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // helper: create a temp DB with a simple table and some rows.
@@ -257,5 +259,56 @@ func TestRestoreCleansWalShm(t *testing.T) {
 	}
 	if count != 5 {
 		t.Fatalf("expected 5 rows, got %d", count)
+	}
+}
+
+func TestLatestBackupAge_NoDir(t *testing.T) {
+	age := LatestBackupAge(filepath.Join(t.TempDir(), "nope"))
+	if age < 24*time.Hour {
+		t.Fatalf("expected very large age for missing dir, got %v", age)
+	}
+}
+
+func TestLatestBackupAge_Empty(t *testing.T) {
+	dir := t.TempDir()
+	age := LatestBackupAge(dir)
+	if age < 24*time.Hour {
+		t.Fatalf("expected very large age for empty dir, got %v", age)
+	}
+}
+
+func TestLatestBackupAge_Recent(t *testing.T) {
+	dir := t.TempDir()
+	// Create a backup file with a timestamp of ~2 minutes ago.
+	ts := time.Now().Add(-2 * time.Minute).Format("2006-01-02-150405")
+	name := fmt.Sprintf("gorss-%s.db", ts)
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	age := LatestBackupAge(dir)
+	if age > 5*time.Minute {
+		t.Fatalf("expected age ~2m, got %v", age)
+	}
+	if age < 1*time.Minute {
+		t.Fatalf("expected age ~2m, got %v", age)
+	}
+}
+
+func TestLatestBackupAge_PicksNewest(t *testing.T) {
+	dir := t.TempDir()
+	// Old backup
+	if err := os.WriteFile(filepath.Join(dir, "gorss-2020-01-01-120000.db"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Recent backup (~1 minute ago)
+	ts := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("gorss-%s.db", ts)), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	age := LatestBackupAge(dir)
+	if age > 5*time.Minute {
+		t.Fatalf("expected age ~1m, got %v", age)
 	}
 }
