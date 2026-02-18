@@ -6,6 +6,8 @@ x-common: &common
   cap_drop:
     - ALL
   read_only: true
+  ports:
+    - "8080:8080"
   volumes:
     - gorss-data:/data
   tmpfs:
@@ -35,8 +37,6 @@ services:
       - prod
     image: ghcr.io/johnwmail/gorss:latest
     container_name: gorss
-    ports:
-      - "8080:8080"
 
   # Local build: docker compose --profile local up -d
   gorss-local:
@@ -48,8 +48,6 @@ services:
       dockerfile: Dockerfile
     image: gorss:local
     container_name: gorss-local
-    ports:
-      - "8080:8080"
 
 volumes:
   gorss-data:
