@@ -1,4 +1,4 @@
-name: Build Docker Container (Optional)
+name: Build & Deploy
 
 on:
   push:
@@ -22,13 +22,9 @@ jobs:
         run: go test -v -race ./...
 
   build:
-    name: Build & Push
+    name: Build & Push Container
     needs: test
     runs-on: ubuntu-latest
-
-    env:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-
     permissions:
       contents: read
       packages: write
@@ -36,33 +32,27 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up QEMU (for multi-arch builds)
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        if: env.DOCKER_USERNAME != ''
-        uses: docker/login-action@v3
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Log in to GitHub Container Registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set short SHA
-        id: vars
-        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Log in to Docker Hub
+        if: secrets.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Extract metadata
         id: meta
@@ -70,25 +60,53 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}
-            ${{ env.DOCKER_USERNAME != '' && format('docker.io/{0}', github.repository) || '' }}
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
 
-      - name: Build and push Docker image
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp }}
-            COMMIT_HASH=${{ steps.vars.outputs.short_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+
+    steps:
+      - name: Skip if no deploy host configured
+        if: env.DEPLOY_HOST == ''
+        run: |
+          echo "::notice::DEPLOY_HOST secret not set — skipping deployment."
+          echo "To enable deployment, add DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, and DEPLOY_GORSS_DIR secrets."
+
+      - name: Deploy to remote host
+        if: env.DEPLOY_HOST != ''
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_GORSS_DIR }}
+            docker compose --profile prod pull
+            docker compose --profile prod down
+            docker compose --profile prod up -d
+            sleep 5
+            docker compose --profile prod ps
