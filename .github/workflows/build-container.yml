@@ -107,7 +107,7 @@ jobs:
         if: env.DEPLOY_HOST == ''
         run: |
           echo "::notice::DEPLOY_HOST secret not set — skipping deployment."
-          echo "To enable deployment, add DEPLOY_HOST, DEPLOY_PORT, DEPLOY_USER, DEPLOY_SSH_KEY, and DEPLOY_GORSS_DIR secrets."
+          echo "To enable deployment, add DEPLOY_HOST, DEPLOY_PORT, DEPLOY_USER, DEPLOY_SSH_KEY, and DEPLOY_CMD secrets."
 
       - name: Deploy to remote host
         if: env.DEPLOY_HOST != ''
@@ -117,10 +117,4 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
-          script: |
-            cd ${{ secrets.DEPLOY_GORSS_DIR }}
-            docker compose --profile prod pull
-            docker compose --profile prod down
-            docker compose --profile prod up -d
-            sleep 5
-            docker compose --profile prod ps
+          script: ${{ secrets.DEPLOY_CMD }}
