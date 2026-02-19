@@ -941,7 +941,12 @@
       }
 
       // Refresh header title after all counts are updated
-      updateViewTitle();
+      // Skip if new-articles badge is showing — the count in the title
+      // would already include the new articles and look confusing next
+      // to the "+N new" badge.  Title updates when the badge is clicked.
+      if (pendingNewCount === 0) {
+        updateViewTitle();
+      }
 
       // Update browser tab title with unread count
       document.title = newUnread > 0 ? `GoRSS (${newUnread})` : 'GoRSS';
@@ -957,6 +962,7 @@
   newBadge.addEventListener('click', async () => {
     pendingNewCount = 0;
     newBadge.style.display = 'none';
+    updateViewTitle();
     await loadArticles();
     articlesList.scrollTo({ top: 0, behavior: 'smooth' });
   });
