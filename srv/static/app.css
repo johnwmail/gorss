@@ -98,9 +98,44 @@ body {
   justify-content: space-between;
 }
 
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1;
+}
+
 .sidebar-logo {
   font-size: 22px;
   font-weight: 600;
+  color: white;
+  text-decoration: none;
+}
+
+.sidebar-logo:hover {
+  text-decoration: underline;
+}
+
+.sidebar-version {
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sidebar-version:hover {
+  color: white;
+  text-decoration: underline;
+}
+
+svg.github-icon {
+  width: 12px !important;
+  height: 12px !important;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .header-actions {
