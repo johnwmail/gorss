@@ -92,7 +92,7 @@ func run() error {
 	if err != nil {
 		hostname = "unknown"
 	}
-	server, err := srv.New(dbPath, hostname, CommitHash)
+	server, err := srv.New(dbPath, hostname, Version)
 	if err != nil {
 		return fmt.Errorf("create server: %w", err)
 	}
