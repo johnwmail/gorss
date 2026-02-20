@@ -97,6 +97,17 @@ func (s *Server) Serve(port string) error {
 		staticHandler.ServeHTTP(w, r)
 	})
 
+	// Root-level favicon/apple-touch-icon (browsers request these without /static/ prefix)
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(s.StaticDir, "favicon.ico"))
+	})
+	mux.HandleFunc("GET /apple-touch-icon.png", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(s.StaticDir, "favicon-180.png"))
+	})
+	mux.HandleFunc("GET /apple-touch-icon-precomposed.png", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(s.StaticDir, "favicon-180.png"))
+	})
+
 	// Health check
 	mux.HandleFunc("GET /health", s.HandleHealth)
 

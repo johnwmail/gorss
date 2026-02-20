@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -110,11 +111,12 @@ func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 	}()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip auth for static files and health check
-		if r.URL.Path == "/health" || 
-		   r.URL.Path == "/static/style.css" || 
-		   r.URL.Path == "/static/app.js" ||
-		   r.URL.Path == "/login" {
+		// Skip auth for static files, favicons, and health check
+		if r.URL.Path == "/health" ||
+		   r.URL.Path == "/login" ||
+		   strings.HasPrefix(r.URL.Path, "/static/") ||
+		   r.URL.Path == "/favicon.ico" ||
+		   strings.HasPrefix(r.URL.Path, "/apple-touch-icon") {
 			next.ServeHTTP(w, r)
 			return
 		}
