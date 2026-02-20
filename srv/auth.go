@@ -210,7 +210,9 @@ func (s *Server) renderLoginPage(w http.ResponseWriter, errorMsg string) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GoRSS - Login</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="icon" type="image/png" href="/static/favicon-32.png" sizes="32x32">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="16x16 32x32">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon-180.png">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
