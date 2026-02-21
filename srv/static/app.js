@@ -119,6 +119,29 @@
     init();
   }
 
+  // Handle bfcache restoration (iOS Safari/Firefox aggressively cache pages).
+  // When restored from bfcache, DOMContentLoaded doesn't re-fire, so re-init.
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) {
+      console.log('Page restored from bfcache, reloading data');
+      reloadData();
+    }
+  });
+
+  // Reload data when tab becomes visible after being hidden (e.g. tab switch)
+  let lastVisibleAt = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      const elapsed = Date.now() - lastVisibleAt;
+      // If hidden for more than 2 minutes, reload articles + counts
+      if (elapsed > 120000) {
+        console.log('Tab became visible after', Math.round(elapsed/1000), 's, reloading data');
+        reloadData();
+      }
+      lastVisibleAt = Date.now();
+    }
+  });
+
   async function init() {
     console.log('GoRSS init starting...');
     try {
@@ -127,17 +150,21 @@
       setupKeyboardNav();
       console.log('Keyboard nav set up');
       setupTitleEdit();
-      // Load feeds, counts, and navigate in parallel for fast startup
-      const [feedsOk] = await Promise.allSettled([
-        loadFeeds(),
-        updateCounts()
-      ]);
-      if (feedsOk.status === 'rejected') console.error('Failed to load feeds');
-      navigateTo(currentView);
+      await reloadData();
       console.log('GoRSS init complete');
     } catch (e) {
       console.error('GoRSS init error:', e);
     }
+  }
+
+  // Reload feeds, counts, and articles (used by init and bfcache/tab restore)
+  async function reloadData() {
+    const [feedsOk] = await Promise.allSettled([
+      loadFeeds(),
+      updateCounts()
+    ]);
+    if (feedsOk.status === 'rejected') console.error('Failed to load feeds');
+    navigateTo(currentView);
   }
 
   function setupEventListeners() {
@@ -577,12 +604,20 @@
     articlesExhausted = false;
 
     try {
-      const res = await fetch(buildArticlesUrl(ARTICLES_PAGE_SIZE, 0));
-      articles = await res.json();
+      const url = buildArticlesUrl(ARTICLES_PAGE_SIZE, 0);
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error('loadArticles: HTTP', res.status, res.statusText, url);
+        articlesList.innerHTML = '<div class="loading">Failed to load articles</div>';
+        return;
+      }
+      const data = await res.json();
+      articles = Array.isArray(data) ? data : [];
       articlesOffset = articles.length;
       if (articles.length < ARTICLES_PAGE_SIZE) articlesExhausted = true;
       renderArticles();
     } catch (e) {
+      console.error('loadArticles error:', e);
       articlesList.innerHTML = '<div class="loading">Failed to load articles</div>';
     }
   }
