@@ -587,6 +587,19 @@
     </a>`;
   }
 
+  // Check if there should be articles for the current view based on count data
+  function hasArticlesForCurrentView(countData) {
+    if (currentView === 'fresh') return (countData.unread || 0) > 0;
+    if (currentView === 'starred') return (countData.starred || 0) > 0;
+    if (currentView === 'all') return (countData.total || 0) > 0;
+    if (currentFeedId && countData.feeds) return (countData.feeds[String(currentFeedId)] || 0) > 0;
+    if (currentCategoryId !== null && countData.feeds) {
+      return feeds.filter(f => (f.category_id || 0) == currentCategoryId)
+        .some(f => (countData.feeds[String(f.id)] || 0) > 0);
+    }
+    return false;
+  }
+
   // Build the API URL for the current view
   function buildArticlesUrl(limit, offset) {
     let url = `/api/articles?limit=${limit}&offset=${offset}`;
@@ -940,8 +953,22 @@
         feeds: data.feeds ? { ...data.feeds } : {}
       };
 
-      // Show banner if there are new articles
-      if (newArticleCount > 0) showNewArticlesBanner(newArticleCount);
+      // Show banner if there are new articles, or auto-load if list is empty.
+      // Check the DOM (not the articles array) because loadArticles may still
+      // be in flight from a recent navigateTo call.
+      const listIsEmpty = articlesList.querySelectorAll('.article').length === 0;
+      if (newArticleCount > 0) {
+        if (listIsEmpty) {
+          // List is empty (e.g. "No articles") — auto-load immediately
+          await loadArticles();
+        } else {
+          showNewArticlesBanner(newArticleCount);
+        }
+      } else if (listIsEmpty && hasArticlesForCurrentView(data)) {
+        // List is empty but there ARE articles for this view — reload
+        // (e.g. race condition where loadArticles ran before data was ready)
+        await loadArticles();
+      }
 
       document.getElementById('count-all').textContent = data.total || 0;
       document.getElementById('count-fresh').textContent = data.unread || 0;
