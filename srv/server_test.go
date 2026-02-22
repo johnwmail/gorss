@@ -402,6 +402,127 @@ func TestArticles(t *testing.T) {
 	})
 }
 
+// --------------- Sort Order ---------------
+
+func TestArticleSortOrder(t *testing.T) {
+	s := newTestServer(t)
+	q := dbgen.New(s.DB)
+	ctx := context.Background()
+
+	// Ensure user
+	email := "test@example.com"
+	now := time.Now()
+	_ = q.UpsertUser(ctx, dbgen.UpsertUserParams{
+		ID: "testuser", Email: &email, CreatedAt: now, LastSeen: now,
+	})
+
+	// Create feed with articles at distinct timestamps
+	feed, _ := q.CreateFeed(ctx, dbgen.CreateFeedParams{
+		UserID: "testuser", Url: "http://example.com/sort-test", Title: "sort-test",
+	})
+	titles := []string{"Oldest", "Middle", "Newest"}
+	for i, title := range titles {
+		pub := now.Add(time.Duration(i) * time.Hour) // 0h, 1h, 2h from now
+		_, _ = q.UpsertArticle(ctx, dbgen.UpsertArticleParams{
+			FeedID: feed.ID, Guid: fmt.Sprintf("sort-%d", i),
+			Url: "http://example.com/" + title, Title: title,
+			Content: "<p>test</p>", PublishedAt: &pub,
+		})
+	}
+
+	type artSummary struct {
+		Title string `json:"title"`
+	}
+
+	t.Run("default newest first", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.HandleGetArticles(w, authReq("GET", "/api/articles", ""))
+		assertStatus(t, w, 200)
+		var list []artSummary
+		decodeJSON(t, w, &list)
+		if len(list) != 3 {
+			t.Fatalf("got %d articles, want 3", len(list))
+		}
+		if list[0].Title != "Newest" {
+			t.Errorf("first article = %q, want Newest", list[0].Title)
+		}
+		if list[2].Title != "Oldest" {
+			t.Errorf("last article = %q, want Oldest", list[2].Title)
+		}
+	})
+
+	t.Run("sort=oldest", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.HandleGetArticles(w, authReq("GET", "/api/articles?sort=oldest", ""))
+		assertStatus(t, w, 200)
+		var list []artSummary
+		decodeJSON(t, w, &list)
+		if len(list) != 3 {
+			t.Fatalf("got %d articles, want 3", len(list))
+		}
+		if list[0].Title != "Oldest" {
+			t.Errorf("first article = %q, want Oldest", list[0].Title)
+		}
+		if list[2].Title != "Newest" {
+			t.Errorf("last article = %q, want Newest", list[2].Title)
+		}
+	})
+
+	t.Run("sort=oldest with view=unread", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.HandleGetArticles(w, authReq("GET", "/api/articles?view=unread&sort=oldest", ""))
+		assertStatus(t, w, 200)
+		var list []artSummary
+		decodeJSON(t, w, &list)
+		if len(list) != 3 {
+			t.Fatalf("got %d articles, want 3", len(list))
+		}
+		if list[0].Title != "Oldest" {
+			t.Errorf("first article = %q, want Oldest", list[0].Title)
+		}
+	})
+
+	t.Run("sort=oldest with feed_id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.HandleGetArticles(w, authReq("GET", fmt.Sprintf("/api/articles?feed_id=%d&sort=oldest", feed.ID), ""))
+		assertStatus(t, w, 200)
+		var list []artSummary
+		decodeJSON(t, w, &list)
+		if len(list) != 3 {
+			t.Fatalf("got %d articles, want 3", len(list))
+		}
+		if list[0].Title != "Oldest" {
+			t.Errorf("first article = %q, want Oldest", list[0].Title)
+		}
+	})
+
+	t.Run("sort=oldest with category", func(t *testing.T) {
+		cat, _ := q.CreateCategory(ctx, dbgen.CreateCategoryParams{UserID: "testuser", Title: "SortCat"})
+		feed2, _ := q.CreateFeed(ctx, dbgen.CreateFeedParams{
+			UserID: "testuser", Url: "http://example.com/sort-cat", Title: "sort-cat", CategoryID: &cat.ID,
+		})
+		for i, title := range titles {
+			pub := now.Add(time.Duration(i) * time.Hour)
+			_, _ = q.UpsertArticle(ctx, dbgen.UpsertArticleParams{
+				FeedID: feed2.ID, Guid: fmt.Sprintf("sortcat-%d", i),
+				Url: "http://example.com/cat-" + title, Title: title,
+				Content: "<p>test</p>", PublishedAt: &pub,
+			})
+		}
+		w := httptest.NewRecorder()
+		s.HandleGetArticles(w, authReq("GET", fmt.Sprintf("/api/articles?category_id=%d&sort=oldest", cat.ID), ""))
+		assertStatus(t, w, 200)
+		var list []artSummary
+		decodeJSON(t, w, &list)
+		if len(list) != 3 {
+			t.Fatalf("got %d articles, want 3", len(list))
+		}
+		if list[0].Title != "Oldest" {
+			t.Errorf("first article = %q, want Oldest", list[0].Title)
+		}
+	})
+}
+
 // --------------- Mark All / Feed Read ---------------
 
 func TestMarkAllRead(t *testing.T) {
