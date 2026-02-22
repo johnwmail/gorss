@@ -255,7 +255,7 @@
       // Infinite scroll: load more when near bottom
       if (!articlesLoading && !articlesExhausted) {
         const { scrollTop, scrollHeight, clientHeight } = articlesList;
-        if (scrollHeight - scrollTop - clientHeight < 300) {
+        if (scrollHeight - scrollTop - clientHeight < 1040) {
           loadMoreArticles();
         }
       }
