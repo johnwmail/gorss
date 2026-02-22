@@ -427,6 +427,7 @@ svg.github-icon {
   min-height: 18px;
 }
 
+.header-sort,
 .header-mark-read {
   background: rgba(255,255,255,0.2);
   border: none;
@@ -439,6 +440,7 @@ svg.github-icon {
   flex-shrink: 0;
 }
 
+.header-sort:hover,
 .header-mark-read:hover {
   background: rgba(255,255,255,0.35);
 }
@@ -831,10 +833,12 @@ kbd {
   background: #3b5998;
 }
 
+[data-theme="dark"] .header-sort,
 [data-theme="dark"] .header-mark-read {
   background: rgba(255,255,255,0.12);
 }
 
+[data-theme="dark"] .header-sort:hover,
 [data-theme="dark"] .header-mark-read:hover {
   background: rgba(255,255,255,0.22);
 }

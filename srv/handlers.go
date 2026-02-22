@@ -233,23 +233,54 @@ func (s *Server) HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 // queryArticlesByCategory runs a category-filtered article query.
 // categoryID=0 means uncategorized (NULL category_id).
 // unreadOnly=true filters to unread articles only.
-func queryArticlesByCategory(ctx context.Context, db *sql.DB, userID string, categoryID int64, unreadOnly bool, limit, offset int64) ([]dbgen.GetArticlesRow, error) {
-	var catFilter string
-	var args []any
+// queryArticles builds and executes a flexible article query with optional filters and sort direction.
+func queryArticles(ctx context.Context, db *sql.DB, userID string, opts articleQueryOpts) ([]dbgen.GetArticlesRow, error) {
+	var filters []string
+	var filterArgs []any
 
-	if categoryID == 0 {
-		catFilter = "f.category_id IS NULL"
-		args = append(args, userID) // for s.user_id
-		// no category arg
-		args = append(args, userID) // for f.user_id
-	} else {
-		catFilter = "f.category_id = ?"
-		args = append(args, userID, categoryID, userID)
+	// Base args: s.user_id (JOIN), f.user_id (WHERE)
+	baseArgs := []any{userID, userID}
+
+	if opts.CategoryID != nil {
+		cid := *opts.CategoryID
+		if cid == 0 {
+			filters = append(filters, "f.category_id IS NULL")
+		} else {
+			filters = append(filters, "f.category_id = ?")
+			filterArgs = append(filterArgs, cid)
+		}
 	}
 
-	unreadFilter := ""
-	if unreadOnly {
-		unreadFilter = " AND (s.is_read IS NULL OR s.is_read = 0)"
+	if opts.FeedID != nil {
+		filters = append(filters, "f.id = ?")
+		filterArgs = append(filterArgs, *opts.FeedID)
+	}
+
+	if opts.UnreadOnly {
+		filters = append(filters, "(s.is_read IS NULL OR s.is_read = 0)")
+	}
+
+	if opts.StarredOnly {
+		filters = append(filters, "s.is_starred = 1")
+	}
+
+	joinType := "LEFT JOIN"
+	if opts.StarredOnly {
+		joinType = "JOIN"
+	}
+
+	whereExtra := ""
+	if len(filters) > 0 {
+		whereExtra = " AND " + strings.Join(filters, " AND ")
+	}
+
+	orderCol := "a.published_at"
+	if opts.StarredOnly {
+		orderCol = "s.starred_at"
+	}
+	orderDir := "DESC"
+	if opts.SortOldest {
+		orderDir = "ASC"
 	}
 
 	query := `
@@ -259,12 +290,16 @@ SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, 
   COALESCE(s.is_starred, 0) as is_starred
 FROM articles a
 JOIN feeds f ON a.feed_id = f.id
-LEFT JOIN article_states s ON s.article_id = a.id AND s.user_id = ?
-WHERE ` + catFilter + ` AND f.user_id = ?` + unreadFilter + `
-ORDER BY a.published_at DESC
+` + joinType + ` article_states s ON s.article_id = a.id AND s.user_id = ?
+WHERE f.user_id = ?` + whereExtra + `
+ORDER BY ` + orderCol + ` ` + orderDir + `
 LIMIT ? OFFSET ?`
 
-	args = append(args, limit, offset)
+	// Assemble args: base (s.user_id, f.user_id) + filter args + pagination
+	var args []any
+	args = append(args, baseArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, opts.Limit, opts.Offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -290,6 +325,16 @@ LIMIT ? OFFSET ?`
 	return articles, rows.Err()
 }
 
+type articleQueryOpts struct {
+	CategoryID *int64
+	FeedID     *int64
+	UnreadOnly bool
+	StarredOnly bool
+	SortOldest bool
+	Limit      int64
+	Offset     int64
+}
+
 // HandleGetArticles returns articles with optional filters
 // parsePagination extracts limit and offset from query params.
 func parsePagination(r *http.Request) (limit, offset int64) {
@@ -309,62 +354,32 @@ func parsePagination(r *http.Request) (limit, offset int64) {
 
 // fetchArticles dispatches the correct query based on view/feed/category filters.
 func (s *Server) fetchArticles(r *http.Request, userID, view, feedID, categoryID string, limit, offset int64) ([]dbgen.GetArticlesRow, error) {
-	q := dbgen.New(s.DB)
+	sortOldest := r.URL.Query().Get("sort") == "oldest"
+
+	opts := articleQueryOpts{
+		SortOldest: sortOldest,
+		Limit:      limit,
+		Offset:     offset,
+	}
 
 	switch {
 	case view == "starred":
-		starred, err := q.GetStarredArticles(r.Context(), dbgen.GetStarredArticlesParams{
-			UserID: userID, UserID_2: userID, Limit: limit, Offset: offset,
-		})
-		if err != nil {
-			return nil, err
-		}
-		out := make([]dbgen.GetArticlesRow, len(starred))
-		for i, a := range starred {
-			out[i] = dbgen.GetArticlesRow(a)
-		}
-		return out, nil
-
+		opts.StarredOnly = true
 	case categoryID != "" && (view == "unread" || view == "fresh"):
 		cid, _ := strconv.ParseInt(categoryID, 10, 64)
-		return queryArticlesByCategory(r.Context(), s.DB, userID, cid, true, limit, offset)
-
+		opts.CategoryID = &cid
+		opts.UnreadOnly = true
 	case view == "unread" || view == "fresh":
-		unread, err := q.GetUnreadArticles(r.Context(), dbgen.GetUnreadArticlesParams{
-			UserID: userID, UserID_2: userID, Limit: limit, Offset: offset,
-		})
-		if err != nil {
-			return nil, err
-		}
-		out := make([]dbgen.GetArticlesRow, len(unread))
-		for i, a := range unread {
-			out[i] = dbgen.GetArticlesRow(a)
-		}
-		return out, nil
-
+		opts.UnreadOnly = true
 	case categoryID != "":
 		cid, _ := strconv.ParseInt(categoryID, 10, 64)
-		return queryArticlesByCategory(r.Context(), s.DB, userID, cid, false, limit, offset)
-
+		opts.CategoryID = &cid
 	case feedID != "":
 		fid, _ := strconv.ParseInt(feedID, 10, 64)
-		byFeed, err := q.GetArticlesByFeed(r.Context(), dbgen.GetArticlesByFeedParams{
-			UserID: userID, ID: fid, UserID_2: userID, Limit: limit, Offset: offset,
-		})
-		if err != nil {
-			return nil, err
-		}
-		out := make([]dbgen.GetArticlesRow, len(byFeed))
-		for i, a := range byFeed {
-			out[i] = dbgen.GetArticlesRow(a)
-		}
-		return out, nil
-
-	default:
-		return q.GetArticles(r.Context(), dbgen.GetArticlesParams{
-			UserID: userID, UserID_2: userID, Limit: limit, Offset: offset,
-		})
+		opts.FeedID = &fid
 	}
+
+	return queryArticles(r.Context(), s.DB, userID, opts)
 }
 
 // HandleGetArticles returns articles with optional filters

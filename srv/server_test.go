@@ -1022,8 +1022,8 @@ func TestThemeSupport(t *testing.T) {
 		if !strings.Contains(body, "cycleTheme") {
 			t.Error("JS should contain cycleTheme function")
 		}
-		if !strings.Contains(body, "hour >= 6 && hour < 21") {
-			t.Error("JS should use 6 AM - 9 PM day range")
+		if !strings.Contains(body, "minutes >= 420 && minutes < 1290") {
+			t.Error("JS should use 7:00 AM - 9:30 PM day range")
 		}
 	})
 

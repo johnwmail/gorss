@@ -2,6 +2,28 @@
 (function() {
   'use strict';
 
+  // ── Sort Order ─────────────────────────────────────────────────────────
+  const SORT_KEY = 'gorss-sort-order';
+
+  function getSortOrder() {
+    return localStorage.getItem(SORT_KEY) || 'newest';
+  }
+
+  function toggleSortOrder() {
+    const next = getSortOrder() === 'newest' ? 'oldest' : 'newest';
+    localStorage.setItem(SORT_KEY, next);
+    updateSortButton();
+    loadArticles();
+  }
+
+  function updateSortButton() {
+    const btn = document.getElementById('btn-sort');
+    if (!btn) return;
+    const order = getSortOrder();
+    btn.textContent = order === 'newest' ? '⏷' : '⏶';
+    btn.title = order === 'newest' ? 'Newest first' : 'Oldest first';
+  }
+
   // ── Theme Management ──────────────────────────────────────────────────
   // Modes: 'auto' (time-based), 'light', 'dark'
   const THEME_KEY = 'gorss-theme-mode';
@@ -11,8 +33,9 @@
   }
 
   function isDaytime() {
-    const hour = new Date().getHours();
-    return hour >= 6 && hour < 21; // 6 AM – 9 PM = day
+    const now = new Date();
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    return minutes >= 420 && minutes < 1290; // 7:00 AM – 9:30 PM = day
   }
 
   function resolveTheme(mode) {
@@ -211,6 +234,10 @@
 
     // Theme toggle
     document.getElementById('btn-theme')?.addEventListener('click', cycleTheme);
+
+    // Sort order toggle
+    document.getElementById('btn-sort')?.addEventListener('click', toggleSortOrder);
+    updateSortButton();
 
     // Close modals
     document.querySelectorAll('.btn-cancel').forEach(btn => {
@@ -607,6 +634,7 @@
     else if (currentView === 'starred') url += '&view=starred';
     else if (currentCategoryId !== null) url += `&category_id=${currentCategoryId}&view=unread`;
     else if (currentFeedId) url += `&feed_id=${currentFeedId}`;
+    if (getSortOrder() === 'oldest') url += '&sort=oldest';
     return url;
   }
 
