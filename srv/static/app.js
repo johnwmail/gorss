@@ -20,7 +20,7 @@
     const btn = document.getElementById('btn-sort');
     if (!btn) return;
     const order = getSortOrder();
-    btn.textContent = order === 'newest' ? '⏷' : '⏶';
+    btn.textContent = order === 'newest' ? '▼' : '▲';
     btn.title = order === 'newest' ? 'Newest first' : 'Oldest first';
   }
 
