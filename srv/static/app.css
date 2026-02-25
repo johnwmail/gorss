@@ -554,6 +554,9 @@ svg.github-icon {
   line-height: 1.6;
   color: var(--text);
   display: none;
+  overflow-x: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .article.expanded .article-content {
@@ -561,8 +564,25 @@ svg.github-icon {
 }
 
 .article-content img {
-  max-width: 100%;
-  height: auto;
+  max-width: 100% !important;
+  height: auto !important;
+  width: auto;
+}
+
+.article-content * {
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+.article-content table {
+  table-layout: fixed;
+  width: 100% !important;
+}
+
+.article-content pre,
+.article-content code {
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .article-content a {
