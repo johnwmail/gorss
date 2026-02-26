@@ -2,6 +2,17 @@
 
 A self-hosted RSS reader written in Go, inspired by Tiny Tiny RSS.
 
+## Pre-Commit Requirements
+
+**All code changes MUST pass `golangci-lint` before committing.** Run:
+
+```bash
+make lint    # or: golangci-lint run ./...
+make test    # also run tests
+```
+
+Do NOT commit if either command fails. Fix all lint issues (including cyclomatic complexity, gocyclo ≤ 15) and test failures first.
+
 ## Project Overview
 
 GoRSS is a web-based RSS/Atom feed reader that replicates the core functionality of TT-RSS without PHP dependencies.

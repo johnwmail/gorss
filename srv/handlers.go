@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -234,13 +235,8 @@ func (s *Server) HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 // categoryID=0 means uncategorized (NULL category_id).
 // unreadOnly=true filters to unread articles only.
 // queryArticles builds and executes a flexible article query with optional filters and sort direction.
-func queryArticles(ctx context.Context, db *sql.DB, userID string, opts articleQueryOpts) ([]dbgen.GetArticlesRow, error) {
-	var filters []string
-	var filterArgs []any
-
-	// Base args: s.user_id (JOIN), f.user_id (WHERE)
-	baseArgs := []any{userID, userID}
-
+// buildArticleFilters constructs WHERE clause filters and args from query options.
+func buildArticleFilters(opts articleQueryOpts, orderCol string) (filters []string, filterArgs []any) {
 	if opts.CategoryID != nil {
 		cid := *opts.CategoryID
 		if cid == 0 {
@@ -250,28 +246,40 @@ func queryArticles(ctx context.Context, db *sql.DB, userID string, opts articleQ
 			filterArgs = append(filterArgs, cid)
 		}
 	}
-
 	if opts.FeedID != nil {
 		filters = append(filters, "f.id = ?")
 		filterArgs = append(filterArgs, *opts.FeedID)
 	}
-
 	if opts.UnreadOnly {
 		filters = append(filters, "(s.is_read IS NULL OR s.is_read = 0)")
 	}
-
 	if opts.StarredOnly {
 		filters = append(filters, "s.is_starred = 1")
 	}
 
+	// Cursor-based pagination
+	if opts.BeforeTime != nil && opts.BeforeID != nil {
+		filters = append(filters, "("+orderCol+" < ? OR ("+orderCol+" = ? AND a.id < ?))")
+		filterArgs = append(filterArgs, *opts.BeforeTime, *opts.BeforeTime, *opts.BeforeID)
+	} else if opts.AfterTime != nil && opts.AfterID != nil {
+		filters = append(filters, "("+orderCol+" > ? OR ("+orderCol+" = ? AND a.id > ?))")
+		filterArgs = append(filterArgs, *opts.AfterTime, *opts.AfterTime, *opts.AfterID)
+	}
+	return
+}
+
+// buildPagination returns the pagination SQL clause and args.
+func buildPagination(opts articleQueryOpts) (string, []any) {
+	if opts.BeforeTime != nil || opts.AfterTime != nil {
+		return "LIMIT ?", []any{opts.Limit}
+	}
+	return "LIMIT ? OFFSET ?", []any{opts.Limit, opts.Offset}
+}
+
+func queryArticles(ctx context.Context, db *sql.DB, userID string, opts articleQueryOpts) ([]dbgen.GetArticlesRow, error) {
 	joinType := "LEFT JOIN"
 	if opts.StarredOnly {
 		joinType = "JOIN"
-	}
-
-	whereExtra := ""
-	if len(filters) > 0 {
-		whereExtra = " AND " + strings.Join(filters, " AND ")
 	}
 
 	orderCol := "a.published_at"
@@ -283,28 +291,14 @@ func queryArticles(ctx context.Context, db *sql.DB, userID string, opts articleQ
 		orderDir = "ASC"
 	}
 
-	// Cursor-based pagination: use (published_at, id) as cursor
-	if opts.BeforeTime != nil && opts.BeforeID != nil {
-		filters = append(filters, "("+orderCol+" < ? OR ("+orderCol+" = ? AND a.id < ?))")
-		filterArgs = append(filterArgs, *opts.BeforeTime, *opts.BeforeTime, *opts.BeforeID)
-	} else if opts.AfterTime != nil && opts.AfterID != nil {
-		filters = append(filters, "("+orderCol+" > ? OR ("+orderCol+" = ? AND a.id > ?))")
-		filterArgs = append(filterArgs, *opts.AfterTime, *opts.AfterTime, *opts.AfterID)
-	}
+	filters, filterArgs := buildArticleFilters(opts, orderCol)
 
+	whereExtra := ""
 	if len(filters) > 0 {
 		whereExtra = " AND " + strings.Join(filters, " AND ")
 	}
 
-	pagination := "LIMIT ?"
-	var paginationArgs []any
-	if opts.BeforeTime != nil || opts.AfterTime != nil {
-		// Cursor mode: no offset needed
-		paginationArgs = append(paginationArgs, opts.Limit)
-	} else {
-		pagination = "LIMIT ? OFFSET ?"
-		paginationArgs = append(paginationArgs, opts.Limit, opts.Offset)
-	}
+	pagination, paginationArgs := buildPagination(opts)
 
 	query := `
 SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, a.published_at, a.created_at,
@@ -318,9 +312,8 @@ WHERE f.user_id = ?` + whereExtra + `
 ORDER BY ` + orderCol + ` ` + orderDir + `
 ` + pagination
 
-	// Assemble args: base (s.user_id, f.user_id) + filter args + pagination
 	var args []any
-	args = append(args, baseArgs...)
+	args = append(args, userID, userID)
 	args = append(args, filterArgs...)
 	args = append(args, paginationArgs...)
 
@@ -379,38 +372,32 @@ func parsePagination(r *http.Request) (limit, offset int64) {
 	return
 }
 
-// fetchArticles dispatches the correct query based on view/feed/category filters.
-func (s *Server) fetchArticles(r *http.Request, userID, view, feedID, categoryID string, limit, offset int64) ([]dbgen.GetArticlesRow, error) {
-	sortOldest := r.URL.Query().Get("sort") == "oldest"
-
-	opts := articleQueryOpts{
-		SortOldest: sortOldest,
-		Limit:      limit,
-		Offset:     offset,
-	}
-
-	// Parse cursor parameters for stable pagination
-	if before := r.URL.Query().Get("before"); before != "" {
+// parseCursorParams extracts cursor-based pagination params from the request.
+func parseCursorParams(q url.Values, opts *articleQueryOpts) {
+	if before := q.Get("before"); before != "" {
 		if t, err := time.Parse(time.RFC3339Nano, before); err == nil {
 			opts.BeforeTime = &t
 		}
 	}
-	if beforeID := r.URL.Query().Get("before_id"); beforeID != "" {
+	if beforeID := q.Get("before_id"); beforeID != "" {
 		if id, err := strconv.ParseInt(beforeID, 10, 64); err == nil {
 			opts.BeforeID = &id
 		}
 	}
-	if after := r.URL.Query().Get("after"); after != "" {
+	if after := q.Get("after"); after != "" {
 		if t, err := time.Parse(time.RFC3339Nano, after); err == nil {
 			opts.AfterTime = &t
 		}
 	}
-	if afterID := r.URL.Query().Get("after_id"); afterID != "" {
+	if afterID := q.Get("after_id"); afterID != "" {
 		if id, err := strconv.ParseInt(afterID, 10, 64); err == nil {
 			opts.AfterID = &id
 		}
 	}
+}
 
+// applyViewFilters sets the query filter flags based on view/feed/category.
+func applyViewFilters(opts *articleQueryOpts, view, feedID, categoryID string) {
 	switch {
 	case view == "starred":
 		opts.StarredOnly = true
@@ -427,7 +414,17 @@ func (s *Server) fetchArticles(r *http.Request, userID, view, feedID, categoryID
 		fid, _ := strconv.ParseInt(feedID, 10, 64)
 		opts.FeedID = &fid
 	}
+}
 
+// fetchArticles dispatches the correct query based on view/feed/category filters.
+func (s *Server) fetchArticles(r *http.Request, userID, view, feedID, categoryID string, limit, offset int64) ([]dbgen.GetArticlesRow, error) {
+	opts := articleQueryOpts{
+		SortOldest: r.URL.Query().Get("sort") == "oldest",
+		Limit:      limit,
+		Offset:     offset,
+	}
+	parseCursorParams(r.URL.Query(), &opts)
+	applyViewFilters(&opts, view, feedID, categoryID)
 	return queryArticles(r.Context(), s.DB, userID, opts)
 }
 
