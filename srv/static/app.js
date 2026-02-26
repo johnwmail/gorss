@@ -628,8 +628,15 @@
   }
 
   // Build the API URL for the current view
-  function buildArticlesUrl(limit, offset) {
-    let url = `/api/articles?limit=${limit}&offset=${offset}`;
+  function buildArticlesUrl(limit, offset, cursor) {
+    let url = `/api/articles?limit=${limit}`;
+    if (cursor) {
+      // Cursor-based pagination: use before/after instead of offset
+      if (cursor.before) url += `&before=${encodeURIComponent(cursor.before)}&before_id=${cursor.before_id}`;
+      else if (cursor.after) url += `&after=${encodeURIComponent(cursor.after)}&after_id=${cursor.after_id}`;
+    } else {
+      url += `&offset=${offset}`;
+    }
     if (currentView === 'fresh') url += '&view=unread';
     else if (currentView === 'starred') url += '&view=starred';
     else if (currentCategoryId !== null) url += `&category_id=${currentCategoryId}&view=unread`;
@@ -677,7 +684,20 @@
     else articlesList.appendChild(loader);
 
     try {
-      const res = await fetch(buildArticlesUrl(ARTICLES_PAGE_SIZE, articlesOffset));
+      // Build cursor from last loaded article for stable pagination
+      let cursor = null;
+      if (articles.length > 0) {
+        const last = articles[articles.length - 1];
+        if (last.published_at) {
+          const sortOrder = getSortOrder();
+          if (sortOrder === 'oldest') {
+            cursor = { after: last.published_at, after_id: last.id };
+          } else {
+            cursor = { before: last.published_at, before_id: last.id };
+          }
+        }
+      }
+      const res = await fetch(buildArticlesUrl(ARTICLES_PAGE_SIZE, articlesOffset, cursor));
       const newArticles = await res.json();
 
       if (newArticles.length === 0) {

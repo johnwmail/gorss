@@ -283,6 +283,29 @@ func queryArticles(ctx context.Context, db *sql.DB, userID string, opts articleQ
 		orderDir = "ASC"
 	}
 
+	// Cursor-based pagination: use (published_at, id) as cursor
+	if opts.BeforeTime != nil && opts.BeforeID != nil {
+		filters = append(filters, "("+orderCol+" < ? OR ("+orderCol+" = ? AND a.id < ?))")
+		filterArgs = append(filterArgs, *opts.BeforeTime, *opts.BeforeTime, *opts.BeforeID)
+	} else if opts.AfterTime != nil && opts.AfterID != nil {
+		filters = append(filters, "("+orderCol+" > ? OR ("+orderCol+" = ? AND a.id > ?))")
+		filterArgs = append(filterArgs, *opts.AfterTime, *opts.AfterTime, *opts.AfterID)
+	}
+
+	if len(filters) > 0 {
+		whereExtra = " AND " + strings.Join(filters, " AND ")
+	}
+
+	pagination := "LIMIT ?"
+	var paginationArgs []any
+	if opts.BeforeTime != nil || opts.AfterTime != nil {
+		// Cursor mode: no offset needed
+		paginationArgs = append(paginationArgs, opts.Limit)
+	} else {
+		pagination = "LIMIT ? OFFSET ?"
+		paginationArgs = append(paginationArgs, opts.Limit, opts.Offset)
+	}
+
 	query := `
 SELECT a.id, a.feed_id, a.guid, a.url, a.title, a.author, a.content, a.summary, a.published_at, a.created_at,
   f.title as feed_title, f.site_url as feed_site_url,
@@ -293,13 +316,13 @@ JOIN feeds f ON a.feed_id = f.id
 ` + joinType + ` article_states s ON s.article_id = a.id AND s.user_id = ?
 WHERE f.user_id = ?` + whereExtra + `
 ORDER BY ` + orderCol + ` ` + orderDir + `
-LIMIT ? OFFSET ?`
+` + pagination
 
 	// Assemble args: base (s.user_id, f.user_id) + filter args + pagination
 	var args []any
 	args = append(args, baseArgs...)
 	args = append(args, filterArgs...)
-	args = append(args, opts.Limit, opts.Offset)
+	args = append(args, paginationArgs...)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -326,13 +349,17 @@ LIMIT ? OFFSET ?`
 }
 
 type articleQueryOpts struct {
-	CategoryID *int64
-	FeedID     *int64
-	UnreadOnly bool
+	CategoryID  *int64
+	FeedID      *int64
+	UnreadOnly  bool
 	StarredOnly bool
-	SortOldest bool
-	Limit      int64
-	Offset     int64
+	SortOldest  bool
+	Limit       int64
+	Offset      int64
+	BeforeTime  *time.Time // cursor: articles before this timestamp
+	BeforeID    *int64     // cursor: tie-breaker for same timestamp
+	AfterTime   *time.Time // cursor: articles after this timestamp (for oldest-first)
+	AfterID     *int64     // cursor: tie-breaker for same timestamp
 }
 
 // HandleGetArticles returns articles with optional filters
@@ -360,6 +387,28 @@ func (s *Server) fetchArticles(r *http.Request, userID, view, feedID, categoryID
 		SortOldest: sortOldest,
 		Limit:      limit,
 		Offset:     offset,
+	}
+
+	// Parse cursor parameters for stable pagination
+	if before := r.URL.Query().Get("before"); before != "" {
+		if t, err := time.Parse(time.RFC3339Nano, before); err == nil {
+			opts.BeforeTime = &t
+		}
+	}
+	if beforeID := r.URL.Query().Get("before_id"); beforeID != "" {
+		if id, err := strconv.ParseInt(beforeID, 10, 64); err == nil {
+			opts.BeforeID = &id
+		}
+	}
+	if after := r.URL.Query().Get("after"); after != "" {
+		if t, err := time.Parse(time.RFC3339Nano, after); err == nil {
+			opts.AfterTime = &t
+		}
+	}
+	if afterID := r.URL.Query().Get("after_id"); afterID != "" {
+		if id, err := strconv.ParseInt(afterID, 10, 64); err == nil {
+			opts.AfterID = &id
+		}
 	}
 
 	switch {
