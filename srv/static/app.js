@@ -276,7 +276,7 @@
     // Resize spacer on window resize
     window.addEventListener('resize', () => {
       const spacer = articlesList.querySelector('.scroll-spacer');
-      if (spacer) spacer.style.height = Math.max(0, articlesList.clientHeight - 80) + 'px';
+      if (spacer) spacer.style.height = Math.max(0, Math.floor(articlesList.clientHeight / 3)) + 'px';
     });
   }
 
@@ -790,7 +790,7 @@
     // Add scroll spacer so last article can be scrolled to top (for scroll-mark-as-read)
     const spacer = document.createElement('div');
     spacer.className = 'scroll-spacer';
-    spacer.style.height = Math.max(0, articlesList.clientHeight - 80) + 'px';
+    spacer.style.height = Math.max(0, Math.floor(articlesList.clientHeight / 3)) + 'px';
     articlesList.appendChild(spacer);
 
     // Event handlers
