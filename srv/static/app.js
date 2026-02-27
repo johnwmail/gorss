@@ -32,17 +32,20 @@
     return localStorage.getItem(THEME_KEY) || 'auto';
   }
 
-  function isDaytime() {
-    const now = new Date();
-    const minutes = now.getHours() * 60 + now.getMinutes();
-    return minutes >= 420 && minutes < 1290; // 7:00 AM – 9:30 PM = day
-  }
-
   function resolveTheme(mode) {
     if (mode === 'light') return 'light';
     if (mode === 'dark') return 'dark';
-    // auto: use device local time
-    return isDaytime() ? 'light' : 'dark';
+    // auto: respect OS-level preference
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      return 'light';
+    }
+    // Fallback: use device local time (6 AM – 9 PM = day)
+    const now = new Date();
+    const h = now.getHours();
+    return (h >= 6 && h < 21) ? 'light' : 'dark';
   }
 
   function applyTheme(theme) {
@@ -75,6 +78,15 @@
       applyTheme(resolveTheme('auto'));
     }
   }, 600000);
+
+  // Listen for OS dark/light mode changes (auto mode reacts instantly)
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (getThemeMode() === 'auto') {
+        applyTheme(resolveTheme('auto'));
+      }
+    });
+  }
 
   // Custom confirm dialog (replaces native confirm())
   function showConfirm(message, title = 'Confirm') {

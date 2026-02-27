@@ -1137,14 +1137,14 @@ func TestThemeSupport(t *testing.T) {
 		if !strings.Contains(body, "gorss-theme-mode") {
 			t.Error("JS should contain theme localStorage key")
 		}
-		if !strings.Contains(body, "isDaytime") {
-			t.Error("JS should contain isDaytime function")
+		if !strings.Contains(body, "resolveTheme") {
+			t.Error("JS should contain resolveTheme function")
 		}
 		if !strings.Contains(body, "cycleTheme") {
 			t.Error("JS should contain cycleTheme function")
 		}
-		if !strings.Contains(body, "minutes >= 420 && minutes < 1290") {
-			t.Error("JS should use 7:00 AM - 9:30 PM day range")
+		if !strings.Contains(body, "prefers-color-scheme") {
+			t.Error("JS should check prefers-color-scheme for auto mode")
 		}
 	})
 
