@@ -451,9 +451,6 @@ svg.github-icon {
   padding: 16px;
 }
 
-.scroll-spacer {
-  flex-shrink: 0;
-}
 
 /* Article Cards */
 .article {

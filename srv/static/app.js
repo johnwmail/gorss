@@ -273,11 +273,7 @@
       }
     });
 
-    // Resize spacer on window resize
-    window.addEventListener('resize', () => {
-      const spacer = articlesList.querySelector('.scroll-spacer');
-      if (spacer) spacer.style.height = Math.max(0, Math.floor(articlesList.clientHeight / 3)) + 'px';
-    });
+
   }
 
   function setupKeyboardNav() {
@@ -688,12 +684,10 @@
     articlesLoading = true;
 
     // Show loading indicator at bottom
-    const spacer = articlesList.querySelector('.scroll-spacer');
     const loader = document.createElement('div');
     loader.className = 'loading-more';
     loader.textContent = 'Loading more...';
-    if (spacer) articlesList.insertBefore(loader, spacer);
-    else articlesList.appendChild(loader);
+    articlesList.appendChild(loader);
 
     try {
       // Build cursor from last loaded article for stable pagination
@@ -722,7 +716,7 @@
         articlesOffset += newArticles.length;
         if (newArticles.length < ARTICLES_PAGE_SIZE) articlesExhausted = true;
 
-        // Append new article elements to the DOM (before spacer)
+        // Append new article elements to the DOM
         const fragment = document.createDocumentFragment();
         unique.forEach((a, idx) => {
           const i = articles.length - unique.length + idx;
@@ -748,8 +742,7 @@
             </div>`;
           fragment.appendChild(el);
         });
-        if (spacer) articlesList.insertBefore(fragment, spacer);
-        else articlesList.appendChild(fragment);
+        articlesList.appendChild(fragment);
       }
     } catch (e) {
       console.error('Failed to load more articles:', e);
@@ -787,11 +780,7 @@
       </article>
     `).join('');
 
-    // Add scroll spacer so last article can be scrolled to top (for scroll-mark-as-read)
-    const spacer = document.createElement('div');
-    spacer.className = 'scroll-spacer';
-    spacer.style.height = Math.max(0, Math.floor(articlesList.clientHeight / 3)) + 'px';
-    articlesList.appendChild(spacer);
+
 
     // Event handlers
     articlesList.querySelectorAll('.article-header').forEach(el => {
