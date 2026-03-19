@@ -279,8 +279,8 @@ func TestLatestBackupAge_Empty(t *testing.T) {
 
 func TestLatestBackupAge_Recent(t *testing.T) {
 	dir := t.TempDir()
-	// Create a backup file with a timestamp of ~2 minutes ago.
-	ts := time.Now().Add(-2 * time.Minute).Format("2006-01-02-150405")
+	// Create a backup file with a timestamp of ~2 minutes ago (UTC).
+	ts := time.Now().UTC().Add(-2 * time.Minute).Format("2006-01-02-150405")
 	name := fmt.Sprintf("gorss-%s.db", ts)
 	if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -301,8 +301,8 @@ func TestLatestBackupAge_PicksNewest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "gorss-2020-01-01-120000.db"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Recent backup (~1 minute ago)
-	ts := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	// Recent backup (~1 minute ago, UTC)
+	ts := time.Now().UTC().Add(-1 * time.Minute).Format("2006-01-02-150405")
 	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("gorss-%s.db", ts)), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -316,8 +316,8 @@ func TestLatestBackupAge_PicksNewest(t *testing.T) {
 func TestLatestBackupAge_SkipsCorrupt(t *testing.T) {
 	dir := t.TempDir()
 
-	// Most recent file is corrupt (not a real SQLite DB)
-	recent := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	// Most recent file is corrupt (not a real SQLite DB), ~1 minute ago UTC
+	recent := time.Now().UTC().Add(-1 * time.Minute).Format("2006-01-02-150405")
 	if err := os.WriteFile(
 		filepath.Join(dir, fmt.Sprintf("gorss-%s.db", recent)),
 		[]byte("not a sqlite db"),
@@ -337,15 +337,15 @@ func TestLatestBackupAge_SkipsCorruptFallsBackToValid(t *testing.T) {
 	db, _ := newTestDB(t)
 	dir := t.TempDir()
 
-	// Create a real valid backup ~3 minutes ago
-	oldTS := time.Now().Add(-3 * time.Minute).Format("2006-01-02-150405")
+	// Create a real valid backup ~3 minutes ago (UTC)
+	oldTS := time.Now().UTC().Add(-3 * time.Minute).Format("2006-01-02-150405")
 	oldPath := filepath.Join(dir, fmt.Sprintf("gorss-%s.db", oldTS))
 	if _, err := db.Exec("VACUUM INTO ?", oldPath); err != nil {
 		t.Fatalf("create valid backup: %v", err)
 	}
 
-	// Most recent file is corrupt
-	newTS := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	// Most recent file is corrupt (~1 minute ago, UTC)
+	newTS := time.Now().UTC().Add(-1 * time.Minute).Format("2006-01-02-150405")
 	if err := os.WriteFile(
 		filepath.Join(dir, fmt.Sprintf("gorss-%s.db", newTS)),
 		[]byte("garbage"),
@@ -367,8 +367,8 @@ func TestLatestBackupAge_SkipsCorruptFallsBackToValid(t *testing.T) {
 func TestLatestBackupAge_SkipsEmptyFile(t *testing.T) {
 	dir := t.TempDir()
 
-	// Recent but empty file
-	ts := time.Now().Add(-1 * time.Minute).Format("2006-01-02-150405")
+	// Recent but empty file (~1 minute ago, UTC)
+	ts := time.Now().UTC().Add(-1 * time.Minute).Format("2006-01-02-150405")
 	if err := os.WriteFile(
 		filepath.Join(dir, fmt.Sprintf("gorss-%s.db", ts)),
 		[]byte{},

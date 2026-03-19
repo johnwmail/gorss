@@ -310,6 +310,51 @@ svg.github-icon {
   font-size: 13px;
 }
 
+/* Feed item wrapper with delete button */
+.nav-item-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.nav-item-wrapper .nav-item {
+  flex: 1;
+}
+
+.feed-delete-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+/* Desktop: show delete button on hover */
+@media (hover: hover) {
+  .feed-delete-btn {
+    opacity: 0;
+  }
+  .nav-item-wrapper:hover .feed-delete-btn {
+    opacity: 0.5;
+  }
+  .feed-delete-btn:hover {
+    opacity: 1 !important;
+    background: rgba(229, 57, 53, 0.15);
+  }
+}
+
+/* Mobile: always show delete button */
+@media (max-width: 768px) {
+  .feed-delete-btn {
+    opacity: 0.6;
+  }
+}
+
 /* Drag and drop */
 .dragging {
   opacity: 0.4;

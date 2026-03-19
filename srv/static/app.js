@@ -610,16 +610,50 @@
       });
     });
 
+    // Feed delete button handler
+    feedsList.querySelectorAll('.feed-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const feedId = btn.dataset.deleteFeed;
+        const feed = feeds.find(f => String(f.id) === String(feedId));
+        if (!feed) return;
+        
+        if (!await showConfirm(`Delete feed "${escapeHtml(feed.title || feed.url)}"? This will remove all articles from this feed.`, 'Delete Feed')) return;
+        
+        try {
+          const res = await fetch(`/api/feeds/${feedId}`, { method: 'DELETE' });
+          if (res.ok) {
+            await loadFeeds();
+            await updateCounts();
+            // If we were viewing this feed, navigate back to fresh
+            if (String(currentFeedId) === String(feedId)) {
+              navigateTo('fresh');
+            } else {
+              await loadArticles();
+            }
+          } else {
+            const err = await res.json();
+            console.error('Delete feed failed:', err.error);
+          }
+        } catch (err) {
+          console.error('Delete feed error:', err);
+        }
+      });
+    });
+
     // Setup drag and drop
     setupDragDrop();
   }
 
   function feedItemHtml(f) {
-    return `<a href="#" class="nav-item" data-feed-id="${f.id}" draggable="true" data-drag-feed="${f.id}">
-      <span class="icon">📡</span>
-      <span class="label">${escapeHtml(f.title || f.url)}</span>
-      <span class="count" data-feed-count="${f.id}">0</span>
-    </a>`;
+    return `<div class="nav-item-wrapper" data-feed-id="${f.id}">
+      <a href="#" class="nav-item" data-feed-id="${f.id}" draggable="true" data-drag-feed="${f.id}">
+        <span class="icon">📡</span>
+        <span class="label">${escapeHtml(f.title || f.url)}</span>
+        <span class="count" data-feed-count="${f.id}">0</span>
+      </a>
+      <button class="feed-delete-btn" data-delete-feed="${f.id}" title="Delete feed">🗑</button>
+    </div>`;
   }
 
   // Check if there should be articles for the current view based on count data
@@ -1263,7 +1297,7 @@
 
         if (dragType === 'feed') {
           // Move feed to this category
-          const feedId = parseInt(dragItem.dataset.dragFeed);
+          const feedId = parseInt(dragItem.querySelector('[data-drag-feed]').dataset.dragFeed);
           const targetCatId = parseInt(el.dataset.dragCat);
           const feedsDiv = el.querySelector('[data-cat-feeds]');
           if (feedsDiv && dragItem.parentNode !== feedsDiv) {
@@ -1271,8 +1305,8 @@
             feedsDiv.style.display = 'block';
             el.querySelector('.category-toggle').textContent = '▾';
             // Save feed move
-            const feedItems = [...feedsDiv.querySelectorAll('[data-drag-feed]')].map((item, i) => ({
-              id: parseInt(item.dataset.dragFeed),
+            const feedItems = [...feedsDiv.querySelectorAll('.nav-item-wrapper')].map((item, i) => ({
+              id: parseInt(item.querySelector('[data-drag-feed]').dataset.dragFeed),
               order: i,
               category_id: targetCatId || null
             }));
@@ -1291,9 +1325,9 @@
     feedsList.querySelectorAll('[data-drag-feed]').forEach(el => {
       el.addEventListener('dragstart', (e) => {
         e.stopPropagation();
-        dragItem = el;
+        dragItem = el.closest('.nav-item-wrapper');
         dragType = 'feed';
-        el.classList.add('dragging');
+        dragItem.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', el.dataset.dragFeed);
       });
@@ -1321,22 +1355,22 @@
         e.stopPropagation();
         el.classList.remove('drag-over');
 
-        if (dragType === 'feed' && dragItem !== el) {
+        if (dragType === 'feed' && dragItem !== el.closest('.nav-item-wrapper')) {
           // Reorder within same category
-          const parent = el.parentNode;
-          const items = [...parent.querySelectorAll('[data-drag-feed]')];
+          const parent = el.closest('.nav-item-wrapper').parentNode;
+          const items = [...parent.querySelectorAll('.nav-item-wrapper')];
           const dragIdx = items.indexOf(dragItem);
-          const dropIdx = items.indexOf(el);
+          const dropIdx = items.indexOf(el.closest('.nav-item-wrapper'));
           if (dragIdx < dropIdx) {
-            parent.insertBefore(dragItem, el.nextSibling);
+            parent.insertBefore(dragItem, el.closest('.nav-item-wrapper').nextSibling);
           } else {
-            parent.insertBefore(dragItem, el);
+            parent.insertBefore(dragItem, el.closest('.nav-item-wrapper'));
           }
           // Save new order
           const catEl = parent.closest('[data-drag-cat]');
           const catId = catEl ? parseInt(catEl.dataset.dragCat) : null;
-          const feedItems = [...parent.querySelectorAll('[data-drag-feed]')].map((item, i) => ({
-            id: parseInt(item.dataset.dragFeed),
+          const feedItems = [...parent.querySelectorAll('.nav-item-wrapper')].map((item, i) => ({
+            id: parseInt(item.querySelector('[data-drag-feed]').dataset.dragFeed),
             order: i,
             category_id: catId || null
           }));
