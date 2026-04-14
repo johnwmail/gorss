@@ -2,6 +2,9 @@
 gorss
 gorss-server
 
+# Test coverage
+coverage.out
+
 # Database
 *.sqlite3
 *.sqlite3-shm

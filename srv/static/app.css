@@ -191,6 +191,19 @@ svg.github-icon {
   gap: 12px;
 }
 
+.nav-item.feed-error {
+  opacity: 0.7;
+}
+
+.nav-item.feed-error .icon {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .nav-item:hover, .nav-item:active {
   background: var(--bg);
 }
@@ -470,6 +483,27 @@ svg.github-icon {
   font-size: 13px;
   margin-bottom: 12px;
   min-height: 18px;
+}
+
+.header-search {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: white;
+  font-size: 14px;
+  width: 250px;
+  max-width: 40vw;
+  outline: none;
+  transition: background 0.15s;
+}
+
+.header-search::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.header-search:focus {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .header-sort,

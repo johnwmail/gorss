@@ -25,9 +25,10 @@ type Server struct {
 	Hostname     string
 	TemplatesDir string
 	StaticDir    string
-	Version      string // used as cache-buster for static assets
-	PurgeDays    int    // articles older than this are filtered on fetch and purged
+	Version      string            // used as cache-buster for static assets
+	PurgeDays    int               // articles older than this are filtered on fetch and purged
 	fetcher      *FeedFetcher
+	templates    map[string]*template.Template // pre-compiled templates
 }
 
 func New(dbPath, hostname, version string) (*Server, error) {
@@ -42,8 +43,12 @@ func New(dbPath, hostname, version string) (*Server, error) {
 		StaticDir:    filepath.Join(baseDir, "static"),
 		Version:      version,
 		fetcher:      NewFeedFetcher(),
+		templates:    make(map[string]*template.Template),
 	}
 	if err := srv.setUpDatabase(dbPath); err != nil {
+		return nil, err
+	}
+	if err := srv.precompileTemplates(); err != nil {
 		return nil, err
 	}
 	return srv, nil
@@ -63,6 +68,20 @@ func (s *Server) setUpDatabase(dbPath string) error {
 	s.DB = wdb
 	if err := db.RunMigrations(wdb); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+	return nil
+}
+
+// precompileTemplates parses all templates at startup for better performance
+func (s *Server) precompileTemplates() error {
+	templateFiles := []string{"app.html", "welcome.html"}
+	for _, name := range templateFiles {
+		path := filepath.Join(s.TemplatesDir, name)
+		tmpl, err := template.ParseFiles(path)
+		if err != nil {
+			return fmt.Errorf("parse template %q: %w", name, err)
+		}
+		s.templates[name] = tmpl
 	}
 	return nil
 }
@@ -118,6 +137,7 @@ func (s *Server) Serve(port string) error {
 	mux.HandleFunc("DELETE /api/feeds/{id}", s.HandleUnsubscribe)
 
 	mux.HandleFunc("GET /api/articles", s.HandleGetArticles)
+	mux.HandleFunc("GET /api/articles/search", s.HandleSearchArticles)
 	mux.HandleFunc("GET /api/articles/{id}", s.HandleGetArticle)
 	mux.HandleFunc("POST /api/articles/{id}/read", s.HandleMarkRead)
 	mux.HandleFunc("POST /api/articles/{id}/unread", s.HandleMarkUnread)
@@ -277,10 +297,9 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderTemplate(w http.ResponseWriter, name string, data any) error {
-	path := filepath.Join(s.TemplatesDir, name)
-	tmpl, err := template.ParseFiles(path)
-	if err != nil {
-		return fmt.Errorf("parse template %q: %w", name, err)
+	tmpl, ok := s.templates[name]
+	if !ok {
+		return fmt.Errorf("template %q not found", name)
 	}
 	if err := tmpl.Execute(w, data); err != nil {
 		return fmt.Errorf("execute template %q: %w", name, err)

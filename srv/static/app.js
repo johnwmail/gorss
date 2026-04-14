@@ -127,6 +127,7 @@
   let currentView = 'fresh';
   let currentFeedId = null;
   let currentCategoryId = null;
+  let currentSearchQuery = null;
   let articles = [];
   let feeds = [];
   let categories = [];
@@ -250,6 +251,23 @@
     // Sort order toggle
     document.getElementById('btn-sort')?.addEventListener('click', toggleSortOrder);
     updateSortButton();
+
+    // Search input
+    const searchInput = document.getElementById('search-input');
+    let searchTimeout = null;
+    searchInput?.addEventListener('input', () => {
+      if (searchTimeout) clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const query = searchInput.value.trim();
+        if (query) {
+          currentSearchQuery = query;
+          loadArticles();
+        } else if (currentSearchQuery) {
+          currentSearchQuery = null;
+          loadArticles();
+        }
+      }, 300);
+    });
 
     // Close modals
     document.querySelectorAll('.btn-cancel').forEach(btn => {
@@ -646,9 +664,13 @@
   }
 
   function feedItemHtml(f) {
+    const hasError = f.error_count > 0;
+    const errorClass = hasError ? 'feed-error' : '';
+    const errorTitle = hasError ? `title="Error: ${escapeHtml(f.last_error || 'Unknown error')}"` : '';
+    
     return `<div class="nav-item-wrapper" data-feed-id="${f.id}">
-      <a href="#" class="nav-item" data-feed-id="${f.id}" draggable="true" data-drag-feed="${f.id}">
-        <span class="icon">📡</span>
+      <a href="#" class="nav-item ${errorClass}" data-feed-id="${f.id}" draggable="true" data-drag-feed="${f.id}" ${errorTitle}>
+        <span class="icon">${hasError ? '⚠️' : '📡'}</span>
         <span class="label">${escapeHtml(f.title || f.url)}</span>
         <span class="count" data-feed-count="${f.id}">0</span>
       </a>
@@ -671,6 +693,17 @@
 
   // Build the API URL for the current view
   function buildArticlesUrl(limit, offset, cursor) {
+    // Search takes precedence
+    if (currentSearchQuery) {
+      let url = `/api/articles/search?q=${encodeURIComponent(currentSearchQuery)}&limit=${limit}`;
+      if (cursor) {
+        url += `&offset=0`; // Search doesn't support cursor pagination yet
+      } else {
+        url += `&offset=${offset}`;
+      }
+      return url;
+    }
+    
     let url = `/api/articles?limit=${limit}`;
     if (cursor) {
       // Cursor-based pagination: use before/after instead of offset
@@ -963,7 +996,15 @@
     await updateCounts();
   }
 
-  // Scroll mark-as-read
+  // Scroll mark-as-read with configurable delay
+  const MARK_READ_DELAY_KEY = 'gorss-mark-read-delay';
+  let pendingMarkReadIds = [];
+  let markReadTimeout = null;
+
+  function getMarkReadDelay() {
+    return parseInt(localStorage.getItem(MARK_READ_DELAY_KEY)) || 500; // Default 500ms
+  }
+
   async function handleScrollMarkRead() {
     const listRect = articlesList.getBoundingClientRect();
     const idsToMark = [];
@@ -984,12 +1025,33 @@
     });
 
     if (idsToMark.length > 0) {
-      await fetch('/api/articles/mark-read-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idsToMark })
-      });
-      await updateCounts();
+      // Add to pending list
+      pendingMarkReadIds.push(...idsToMark);
+      
+      // Clear existing timeout
+      if (markReadTimeout) {
+        clearTimeout(markReadTimeout);
+      }
+      
+      // Schedule batch mark-read with delay
+      const delay = getMarkReadDelay();
+      markReadTimeout = setTimeout(async () => {
+        if (pendingMarkReadIds.length > 0) {
+          const ids = [...pendingMarkReadIds];
+          pendingMarkReadIds = [];
+          
+          try {
+            await fetch('/api/articles/mark-read-batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids: ids })
+            });
+            await updateCounts();
+          } catch (e) {
+            console.error('Failed to mark articles read:', e);
+          }
+        }
+      }, delay);
     }
   }
 
@@ -1185,7 +1247,11 @@
       });
 
       const data = await res.json();
-      result.textContent = `Imported ${data.imported} feeds, skipped ${data.skipped}`;
+
+      // Close modal & clear form
+      document.getElementById('modal-import').classList.remove('open');
+      form.reset();
+      result.textContent = '';
 
       await loadFeeds();
       await loadArticles();

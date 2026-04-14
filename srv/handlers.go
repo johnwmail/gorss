@@ -1000,3 +1000,59 @@ func (s *Server) HandleReorderFeeds(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
+
+// HandleSearchArticles searches articles by title, content, or summary
+func (s *Server) HandleSearchArticles(w http.ResponseWriter, r *http.Request) {
+	userID, _ := s.ensureUser(r)
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		jsonError(w, "query parameter 'q' is required", http.StatusBadRequest)
+		return
+	}
+
+	limit, offset := parsePagination(r)
+
+	// Use the same search term for all three fields
+	searchPattern := "%" + query + "%"
+
+	q := dbgen.New(s.DB)
+	articles, err := q.SearchArticles(r.Context(), dbgen.SearchArticlesParams{
+		UserID:   userID,
+		UserID_2: userID,
+		Title:    searchPattern,
+		Content:  searchPattern,
+		Summary:  searchPattern,
+		Limit:    limit,
+		Offset:   offset,
+	})
+	if err != nil {
+		slog.Error("search articles", "error", err)
+		jsonError(w, "failed to search articles", http.StatusInternalServerError)
+		return
+	}
+
+	// Strip content/summary from list response
+	type articleSummary struct {
+		ID          int64      `json:"id"`
+		FeedID      int64      `json:"feed_id"`
+		Url         string     `json:"url"`
+		Title       string     `json:"title"`
+		Author      string     `json:"author"`
+		PublishedAt *time.Time `json:"published_at"`
+		FeedTitle   string     `json:"feed_title"`
+		FeedSiteUrl string     `json:"feed_site_url"`
+		IsRead      int64      `json:"is_read"`
+		IsStarred   int64      `json:"is_starred"`
+	}
+	result := make([]articleSummary, 0, len(articles))
+	for _, a := range articles {
+		result = append(result, articleSummary{
+			ID: a.ID, FeedID: a.FeedID, Url: a.Url, Title: a.Title,
+			Author: a.Author, PublishedAt: a.PublishedAt,
+			FeedTitle: a.FeedTitle, FeedSiteUrl: a.FeedSiteUrl,
+			IsRead: a.IsRead, IsStarred: a.IsStarred,
+		})
+	}
+	jsonResponse(w, result)
+}
