@@ -996,7 +996,15 @@
     await updateCounts();
   }
 
-  // Scroll mark-as-read
+  // Scroll mark-as-read with configurable delay
+  const MARK_READ_DELAY_KEY = 'gorss-mark-read-delay';
+  let pendingMarkReadIds = [];
+  let markReadTimeout = null;
+
+  function getMarkReadDelay() {
+    return parseInt(localStorage.getItem(MARK_READ_DELAY_KEY)) || 500; // Default 500ms
+  }
+
   async function handleScrollMarkRead() {
     const listRect = articlesList.getBoundingClientRect();
     const idsToMark = [];
@@ -1017,12 +1025,33 @@
     });
 
     if (idsToMark.length > 0) {
-      await fetch('/api/articles/mark-read-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idsToMark })
-      });
-      await updateCounts();
+      // Add to pending list
+      pendingMarkReadIds.push(...idsToMark);
+      
+      // Clear existing timeout
+      if (markReadTimeout) {
+        clearTimeout(markReadTimeout);
+      }
+      
+      // Schedule batch mark-read with delay
+      const delay = getMarkReadDelay();
+      markReadTimeout = setTimeout(async () => {
+        if (pendingMarkReadIds.length > 0) {
+          const ids = [...pendingMarkReadIds];
+          pendingMarkReadIds = [];
+          
+          try {
+            await fetch('/api/articles/mark-read-batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids: ids })
+            });
+            await updateCounts();
+          } catch (e) {
+            console.error('Failed to mark articles read:', e);
+          }
+        }
+      }, delay);
     }
   }
 
