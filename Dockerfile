@@ -15,9 +15,13 @@ RUN go mod download
 COPY . .
 
 # Build args for version info
+# Use timestamp for cache-busting: docker build --build-arg VERSION=$(date +%s)
 ARG VERSION=vDev
 ARG BUILD_TIME=timeless
 ARG COMMIT_HASH=sha-unknown
+
+# Default VERSION to timestamp if not set (for cache-busting JS assets)
+ARG CACHE_BUST=$BUILD_TIME
 
 # Build binary
 RUN CGO_ENABLED=1 GOOS=linux go build -o gorss \

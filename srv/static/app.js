@@ -1247,7 +1247,11 @@
       });
 
       const data = await res.json();
-      result.textContent = `Imported ${data.imported} feeds, skipped ${data.skipped}`;
+
+      // Close modal & clear form
+      document.getElementById('modal-import').classList.remove('open');
+      form.reset();
+      result.textContent = '';
 
       await loadFeeds();
       await loadArticles();
