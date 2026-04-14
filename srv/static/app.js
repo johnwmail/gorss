@@ -127,6 +127,7 @@
   let currentView = 'fresh';
   let currentFeedId = null;
   let currentCategoryId = null;
+  let currentSearchQuery = null;
   let articles = [];
   let feeds = [];
   let categories = [];
@@ -250,6 +251,23 @@
     // Sort order toggle
     document.getElementById('btn-sort')?.addEventListener('click', toggleSortOrder);
     updateSortButton();
+
+    // Search input
+    const searchInput = document.getElementById('search-input');
+    let searchTimeout = null;
+    searchInput?.addEventListener('input', () => {
+      if (searchTimeout) clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const query = searchInput.value.trim();
+        if (query) {
+          currentSearchQuery = query;
+          loadArticles();
+        } else if (currentSearchQuery) {
+          currentSearchQuery = null;
+          loadArticles();
+        }
+      }, 300);
+    });
 
     // Close modals
     document.querySelectorAll('.btn-cancel').forEach(btn => {
@@ -646,9 +664,13 @@
   }
 
   function feedItemHtml(f) {
+    const hasError = f.error_count > 0;
+    const errorClass = hasError ? 'feed-error' : '';
+    const errorTitle = hasError ? `title="Error: ${escapeHtml(f.last_error || 'Unknown error')}"` : '';
+    
     return `<div class="nav-item-wrapper" data-feed-id="${f.id}">
-      <a href="#" class="nav-item" data-feed-id="${f.id}" draggable="true" data-drag-feed="${f.id}">
-        <span class="icon">📡</span>
+      <a href="#" class="nav-item ${errorClass}" data-feed-id="${f.id}" draggable="true" data-drag-feed="${f.id}" ${errorTitle}>
+        <span class="icon">${hasError ? '⚠️' : '📡'}</span>
         <span class="label">${escapeHtml(f.title || f.url)}</span>
         <span class="count" data-feed-count="${f.id}">0</span>
       </a>
@@ -671,6 +693,17 @@
 
   // Build the API URL for the current view
   function buildArticlesUrl(limit, offset, cursor) {
+    // Search takes precedence
+    if (currentSearchQuery) {
+      let url = `/api/articles/search?q=${encodeURIComponent(currentSearchQuery)}&limit=${limit}`;
+      if (cursor) {
+        url += `&offset=0`; // Search doesn't support cursor pagination yet
+      } else {
+        url += `&offset=${offset}`;
+      }
+      return url;
+    }
+    
     let url = `/api/articles?limit=${limit}`;
     if (cursor) {
       // Cursor-based pagination: use before/after instead of offset
