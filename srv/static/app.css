@@ -266,6 +266,7 @@ svg.github-icon {
 
 .cat-header {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -290,6 +291,7 @@ svg.github-icon {
   border-radius: 12px;
   font-size: 11px;
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .cat-mark-read {
@@ -300,6 +302,7 @@ svg.github-icon {
   opacity: 0.5;
   padding: 2px 4px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 /* Desktop: hide by default, show on hover */
@@ -438,6 +441,7 @@ svg.github-icon {
   font-size: 20px;
   font-weight: 500;
   flex: 1;
+  min-width: 0;
 }
 
 .main-title #current-view.editable {
@@ -486,14 +490,13 @@ svg.github-icon {
 }
 
 .header-search {
+  display: none;
   background: rgba(255, 255, 255, 0.15);
   border: none;
   border-radius: 6px;
   padding: 6px 12px;
   color: white;
   font-size: 14px;
-  width: 250px;
-  max-width: 40vw;
   outline: none;
   transition: background 0.15s;
 }
@@ -507,7 +510,8 @@ svg.github-icon {
 }
 
 .header-sort,
-.header-mark-read {
+.header-mark-read,
+.header-btn-search-toggle {
   background: rgba(255,255,255,0.2);
   border: none;
   color: white;
@@ -520,7 +524,8 @@ svg.github-icon {
 }
 
 .header-sort:hover,
-.header-mark-read:hover {
+.header-mark-read:hover,
+.header-btn-search-toggle:hover {
   background: rgba(255,255,255,0.35);
 }
 
@@ -912,6 +917,22 @@ kbd {
   background: var(--border);
 }
 
+/* Search Active State */
+.main-header.search-active .main-title,
+.main-header.search-active .menu-btn,
+.main-header.search-active .header-sort,
+.main-header.search-active .header-mark-read,
+.main-header.search-active .header-btn-search-toggle {
+  display: none;
+}
+
+.main-header.search-active .header-search {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+
 /* Dark theme specific overrides */
 [data-theme="dark"] .sidebar-header {
   background: #3b5998;
@@ -930,12 +951,14 @@ kbd {
 }
 
 [data-theme="dark"] .header-sort,
-[data-theme="dark"] .header-mark-read {
+[data-theme="dark"] .header-mark-read,
+[data-theme="dark"] .header-btn-search-toggle {
   background: rgba(255,255,255,0.12);
 }
 
 [data-theme="dark"] .header-sort:hover,
-[data-theme="dark"] .header-mark-read:hover {
+[data-theme="dark"] .header-mark-read:hover,
+[data-theme="dark"] .header-btn-search-toggle:hover {
   background: rgba(255,255,255,0.22);
 }
 

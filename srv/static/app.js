@@ -291,6 +291,31 @@
       }
     });
 
+    // Mobile Search Toggle
+    const mainHeader = document.querySelector('.main-header');
+    document.getElementById('btn-search-toggle')?.addEventListener('click', () => {
+      mainHeader.classList.add('search-active');
+      searchInput.focus();
+    });
+
+    searchInput?.addEventListener('blur', () => {
+      if (searchInput.value.trim() === '') {
+        mainHeader.classList.remove('search-active');
+      }
+    });
+
+    searchInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        mainHeader.classList.remove('search-active');
+        // If there was a query, clear it and reload
+        if (searchInput.value.trim() !== '') {
+          searchInput.value = '';
+          currentSearchQuery = null;
+          loadArticles();
+        }
+      }
+    });
+
 
   }
 
