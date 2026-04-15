@@ -92,7 +92,7 @@ body {
 .sidebar-header {
   background: var(--primary);
   color: white;
-  padding: 16px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1038,6 +1038,10 @@ body,
 
   .menu-btn {
     display: block;
+  }
+
+  .sidebar-header {
+    padding: 10px 16px;
   }
 
   .main-header {
