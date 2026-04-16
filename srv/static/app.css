@@ -9,6 +9,8 @@
 :root {
   --primary: #1a73e8;
   --primary-dark: #1557b0;
+  --header-height: 60px;
+  --header-height-mobile: 56px;
   --bg: #f5f5f5;
   --card-bg: #ffffff;
   --text: #333333;
@@ -16,12 +18,12 @@
   --border: #e0e0e0;
   --unread: #1a73e8;
   --sidebar-width: 280px;
-  --shadow: rgba(0,0,0,0.08);
-  --shadow-hover: rgba(0,0,0,0.12);
-  --overlay: rgba(0,0,0,0.5);
-  --header-btn-hover: rgba(255,255,255,0.2);
-  --cat-hover: rgba(0,0,0,0.04);
-  --mark-read-hover-bg: rgba(0,0,0,0.06);
+  --shadow: rgba(0, 0, 0, 0.08);
+  --shadow-hover: rgba(0, 0, 0, 0.12);
+  --overlay: rgba(0, 0, 0, 0.5);
+  --header-btn-hover: rgba(255, 255, 255, 0.2);
+  --cat-hover: rgba(0, 0, 0, 0.04);
+  --mark-read-hover-bg: rgba(0, 0, 0, 0.06);
 }
 
 /* Dark theme - soft/comfortable for night reading */
@@ -34,12 +36,12 @@
   --text-muted: #96989d;
   --border: #44474d;
   --unread: #7bafe8;
-  --shadow: rgba(0,0,0,0.2);
-  --shadow-hover: rgba(0,0,0,0.35);
-  --overlay: rgba(0,0,0,0.6);
-  --header-btn-hover: rgba(255,255,255,0.12);
-  --cat-hover: rgba(255,255,255,0.04);
-  --mark-read-hover-bg: rgba(255,255,255,0.06);
+  --shadow: rgba(0, 0, 0, 0.2);
+  --shadow-hover: rgba(0, 0, 0, 0.35);
+  --overlay: rgba(0, 0, 0, 0.6);
+  --header-btn-hover: rgba(255, 255, 255, 0.12);
+  --cat-hover: rgba(255, 255, 255, 0.04);
+  --mark-read-hover-bg: rgba(255, 255, 255, 0.06);
 }
 
 /* Prevent flash of wrong theme on load - respect OS preference as fallback */
@@ -53,12 +55,12 @@
     --text-muted: #96989d;
     --border: #44474d;
     --unread: #7bafe8;
-    --shadow: rgba(0,0,0,0.2);
-    --shadow-hover: rgba(0,0,0,0.35);
-    --overlay: rgba(0,0,0,0.6);
-    --header-btn-hover: rgba(255,255,255,0.12);
-    --cat-hover: rgba(255,255,255,0.04);
-    --mark-read-hover-bg: rgba(255,255,255,0.06);
+    --shadow: rgba(0, 0, 0, 0.2);
+    --shadow-hover: rgba(0, 0, 0, 0.35);
+    --overlay: rgba(0, 0, 0, 0.6);
+    --header-btn-hover: rgba(255, 255, 255, 0.12);
+    --cat-hover: rgba(255, 255, 255, 0.04);
+    --mark-read-hover-bg: rgba(255, 255, 255, 0.06);
   }
 }
 
@@ -92,7 +94,8 @@ body {
 .sidebar-header {
   background: var(--primary);
   color: white;
-  padding: 14px 16px;
+  height: var(--header-height);
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -100,13 +103,13 @@ body {
 
 .sidebar-brand {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  line-height: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .sidebar-logo {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   color: white;
   text-decoration: none;
@@ -117,8 +120,8 @@ body {
 }
 
 .sidebar-version {
-  font-size: 11px;
-  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -148,13 +151,15 @@ svg.github-icon {
   border: none;
   color: white;
   font-size: 18px;
-  padding: 8px;
+  padding: 6px 12px;
+  /* Standardize padding to match other header buttons */
   cursor: pointer;
   border-radius: 50%;
   transition: background 0.2s;
 }
 
-.header-btn:hover, .header-btn:active {
+.header-btn:hover,
+.header-btn:active {
   background: var(--header-btn-hover);
 }
 
@@ -200,11 +205,19 @@ svg.github-icon {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
-.nav-item:hover, .nav-item:active {
+.nav-item:hover,
+.nav-item:active {
   background: var(--bg);
 }
 
@@ -311,9 +324,11 @@ svg.github-icon {
     opacity: 0;
     transition: opacity 0.15s;
   }
+
   .category-header:hover .cat-mark-read {
     opacity: 0.6;
   }
+
   .cat-mark-read:hover {
     opacity: 1 !important;
     color: var(--primary);
@@ -355,9 +370,11 @@ svg.github-icon {
   .feed-delete-btn {
     opacity: 0;
   }
+
   .nav-item-wrapper:hover .feed-delete-btn {
     opacity: 0.5;
   }
+
   .feed-delete-btn:hover {
     opacity: 1 !important;
     background: rgba(229, 57, 53, 0.15);
@@ -420,7 +437,8 @@ svg.github-icon {
 .main-header {
   background: var(--primary);
   color: white;
-  padding: 16px 20px;
+  height: var(--header-height);
+  padding: 0 20px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -446,12 +464,12 @@ svg.github-icon {
 
 .main-title #current-view.editable {
   cursor: pointer;
-  border-bottom: 1px dashed rgba(255,255,255,0.4);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.4);
   padding-bottom: 2px;
 }
 
 .main-title #current-view.editable:hover {
-  border-bottom-color: rgba(255,255,255,0.8);
+  border-bottom-color: rgba(255, 255, 255, 0.8);
 }
 
 /* Edit Feed Modal */
@@ -512,7 +530,7 @@ svg.github-icon {
 .header-sort,
 .header-mark-read,
 .header-btn-search-toggle {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   color: white;
   font-size: 16px;
@@ -526,7 +544,7 @@ svg.github-icon {
 .header-sort:hover,
 .header-mark-read:hover,
 .header-btn-search-toggle:hover {
-  background: rgba(255,255,255,0.35);
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .articles-container {
@@ -797,8 +815,15 @@ svg.github-icon {
 }
 
 @keyframes confirmSlideIn {
-  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .confirm-icon {
@@ -843,7 +868,7 @@ svg.github-icon {
 
 .confirm-modal .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Shortcuts */
@@ -872,7 +897,7 @@ kbd {
 .new-badge {
   font-size: 14px;
   font-weight: 400;
-  color: rgba(255,255,255,0.85);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   white-space: nowrap;
   animation: badge-pulse 0.3s ease;
@@ -884,8 +909,15 @@ kbd {
 }
 
 @keyframes badge-pulse {
-  0% { opacity: 0; transform: scale(0.8); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .loading-more {
@@ -953,13 +985,13 @@ kbd {
 [data-theme="dark"] .header-sort,
 [data-theme="dark"] .header-mark-read,
 [data-theme="dark"] .header-btn-search-toggle {
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 [data-theme="dark"] .header-sort:hover,
 [data-theme="dark"] .header-mark-read:hover,
 [data-theme="dark"] .header-btn-search-toggle:hover {
-  background: rgba(255,255,255,0.22);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 [data-theme="dark"] .btn-primary {
@@ -1004,7 +1036,7 @@ kbd {
 }
 
 [data-theme="dark"] .confirm-modal .btn-primary:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Smooth theme transition */
@@ -1040,12 +1072,10 @@ body,
     display: block;
   }
 
-  .sidebar-header {
-    padding: 10px 16px;
-  }
-
+  .sidebar-header,
   .main-header {
-    padding: 12px 16px;
+    height: var(--header-height-mobile);
+    padding: 0 16px;
   }
 
   .articles-container {
