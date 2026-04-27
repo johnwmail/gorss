@@ -3,8 +3,11 @@ package srv
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -14,15 +17,44 @@ import (
 
 // FeedFetcher handles RSS/Atom feed fetching and parsing
 type FeedFetcher struct {
-	parser *gofeed.Parser
-	client *http.Client
+	parser           *gofeed.Parser
+	client           *http.Client
+	AllowPrivateURLs bool // for testing only
 }
+
+const maxFeedBodySize = 10 << 20 // 10 MB
 
 func NewFeedFetcher() *FeedFetcher {
 	return &FeedFetcher{
 		parser: gofeed.NewParser(),
 		client: &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// isPrivateURL checks whether a URL resolves to a private, loopback, or link-local address.
+func isPrivateURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return true
+	}
+	host := u.Hostname()
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return true
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return true
+		}
+	}
+	return false
 }
 
 // FeedFetchResult contains the parsed feed data
@@ -60,8 +92,12 @@ func (f *FeedFetcher) FetchConditional(ctx context.Context, url, etag, lastModif
 	return f.fetchWithCaching(ctx, url, etag, lastModified)
 }
 
-func (f *FeedFetcher) fetchWithCaching(ctx context.Context, url, etag, lastModified string) (*FeedFetchResult, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func (f *FeedFetcher) fetchWithCaching(ctx context.Context, urlStr, etag, lastModified string) (*FeedFetchResult, error) {
+	if !f.AllowPrivateURLs && isPrivateURL(urlStr) {
+		return nil, fmt.Errorf("invalid feed URL: private or reserved address")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -85,7 +121,7 @@ func (f *FeedFetcher) fetchWithCaching(ctx context.Context, url, etag, lastModif
 		return nil, errNotModified
 	}
 
-	feed, err := f.parser.Parse(resp.Body)
+	feed, err := f.parser.Parse(io.LimitReader(resp.Body, maxFeedBodySize))
 	if err != nil {
 		return nil, fmt.Errorf("parse feed: %w", err)
 	}

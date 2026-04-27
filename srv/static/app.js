@@ -891,8 +891,9 @@
             const id = parseInt(article.dataset.id);
             const res = await fetch(`/api/articles/${id}`);
             const data = await res.json();
-            const doc = new DOMParser().parseFromString(data.content || data.summary || '', 'text/html');
-            contentEl.innerHTML = doc.body.innerHTML;
+            const raw = data.content || data.summary || '';
+            const doc = new DOMParser().parseFromString(raw, 'text/html');
+            contentEl.innerHTML = DOMPurify.sanitize(doc.body.innerHTML, {ALLOWED_TAGS: ['p','br','b','i','u','em','strong','a','ul','ol','li','h1','h2','h3','h4','h5','h6','blockquote','pre','code','img','table','thead','tbody','tr','th','td','hr','span','div','figure','figcaption','dl','dt','dd','sub','sup','del','ins','abbr','cite','q','small','s'], ALLOWED_ATTR: ['href','target','rel','src','alt','title','width','height','class']});
             contentEl.querySelectorAll('a').forEach(link => {
               link.setAttribute('target', '_blank');
               link.setAttribute('rel', 'noopener noreferrer');

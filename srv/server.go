@@ -215,8 +215,15 @@ func (s *Server) Serve(port string) error {
 	authMode := GetAuthMode()
 	slog.Info("starting server", "addr", addr, "auth_mode", authMode)
 
-	handler := gzipMiddleware(s.AuthMiddleware(mux))
+	handler := gzipMiddleware(s.AuthMiddleware(cspMiddleware(mux)))
 	return http.ListenAndServe(addr, handler)
+}
+
+func cspMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; img-src 'self' https: http: data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // gzip middleware

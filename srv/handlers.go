@@ -55,6 +55,18 @@ func (s *Server) ensureUser(r *http.Request) (string, error) {
 	return userID, err
 }
 
+// requireUser ensures a user exists and returns the user ID, or writes an error response.
+// Returns (userID, true) on success, or ("", false) if the caller should return immediately.
+func (s *Server) requireUser(w http.ResponseWriter, r *http.Request) (string, bool) {
+	userID, err := s.ensureUser(r)
+	if err != nil {
+		slog.Error("ensure user", "error", err)
+		jsonError(w, "internal error", http.StatusInternalServerError)
+		return "", false
+	}
+	return userID, true
+}
+
 // HandleHealth returns health status
 func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -63,9 +75,9 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetFeeds returns all feeds for the user
 func (s *Server) HandleGetFeeds(w http.ResponseWriter, r *http.Request) {
-	userID, err := s.ensureUser(r)
-	if err != nil {
-		slog.Warn("ensure user", "error", err)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
 	}
 
 	q := dbgen.New(s.DB)
@@ -82,9 +94,9 @@ func (s *Server) HandleGetFeeds(w http.ResponseWriter, r *http.Request) {
 
 // HandleSubscribe subscribes to a new feed
 func (s *Server) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
-	userID, err := s.ensureUser(r)
-	if err != nil {
-		slog.Warn("ensure user", "error", err)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
 	}
 
 	var req struct {
@@ -151,7 +163,10 @@ func (s *Server) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdateFeed updates a feed's title and/or URL
 func (s *Server) HandleUpdateFeed(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	feedID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid feed id", http.StatusBadRequest)
@@ -213,7 +228,10 @@ func (s *Server) HandleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 
 // HandleUnsubscribe removes a feed subscription
 func (s *Server) HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	feedID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid feed id", http.StatusBadRequest)
@@ -430,7 +448,10 @@ func (s *Server) fetchArticles(r *http.Request, userID, view, feedID, categoryID
 
 // HandleGetArticles returns articles with optional filters
 func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	limit, offset := parsePagination(r)
 
 	query := r.URL.Query()
@@ -469,7 +490,10 @@ func (s *Server) HandleGetArticles(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetArticle returns a single article with full content
 func (s *Server) HandleGetArticle(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid article id", http.StatusBadRequest)
@@ -490,7 +514,10 @@ func (s *Server) HandleGetArticle(w http.ResponseWriter, r *http.Request) {
 
 // HandleMarkRead marks an article as read
 func (s *Server) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid article id", http.StatusBadRequest)
@@ -513,7 +540,10 @@ func (s *Server) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 
 // HandleMarkUnread marks an article as unread
 func (s *Server) HandleMarkUnread(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid article id", http.StatusBadRequest)
@@ -533,7 +563,10 @@ func (s *Server) HandleMarkUnread(w http.ResponseWriter, r *http.Request) {
 
 // HandleStar stars an article
 func (s *Server) HandleStar(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid article id", http.StatusBadRequest)
@@ -555,7 +588,10 @@ func (s *Server) HandleStar(w http.ResponseWriter, r *http.Request) {
 
 // HandleUnstar unstars an article
 func (s *Server) HandleUnstar(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	articleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid article id", http.StatusBadRequest)
@@ -598,7 +634,10 @@ func (s *Server) markCategoryRead(ctx context.Context, userID string, categoryID
 
 // HandleMarkReadBatch marks multiple articles as read in a single transaction
 func (s *Server) HandleMarkReadBatch(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 
 	var body struct {
 		IDs []int64 `json:"ids"`
@@ -643,7 +682,10 @@ func (s *Server) HandleMarkReadBatch(w http.ResponseWriter, r *http.Request) {
 
 // HandleMarkAllRead marks all articles as read (optionally filtered by feed or category)
 func (s *Server) HandleMarkAllRead(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	q := dbgen.New(s.DB)
 	now := time.Now()
 
@@ -683,7 +725,10 @@ func (s *Server) HandleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 
 // HandleMarkFeedRead marks all articles in a feed as read
 func (s *Server) HandleMarkFeedRead(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	feedID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonError(w, "invalid feed id", http.StatusBadRequest)
@@ -712,7 +757,10 @@ func (s *Server) HandleRefresh(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetCategories returns all categories
 func (s *Server) HandleGetCategories(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	q := dbgen.New(s.DB)
 
 	categories, err := q.GetCategoriesOrdered(r.Context(), userID)
@@ -728,7 +776,10 @@ func (s *Server) HandleGetCategories(w http.ResponseWriter, r *http.Request) {
 
 // HandleCreateCategory creates a new category
 func (s *Server) HandleCreateCategory(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		Title string `json:"title"`
@@ -757,7 +808,10 @@ func (s *Server) HandleCreateCategory(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetCounts returns unread and starred counts, plus per-feed counts
 func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	q := dbgen.New(s.DB)
 
 	total, _ := q.GetTotalArticleCount(r.Context(), userID)
@@ -783,7 +837,10 @@ func (s *Server) HandleGetCounts(w http.ResponseWriter, r *http.Request) {
 
 // HandleExportOPML exports feeds as OPML
 func (s *Server) HandleExportOPML(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	q := dbgen.New(s.DB)
 
 	feeds, err := q.GetFeeds(r.Context(), userID)
@@ -905,7 +962,10 @@ func (s *Server) importSingleFeed(ctx context.Context, userID string, f FeedImpo
 
 // HandleImportOPML imports feeds from OPML
 func (s *Server) HandleImportOPML(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		jsonError(w, "failed to parse form", http.StatusBadRequest)
@@ -943,7 +1003,10 @@ func (s *Server) HandleImportOPML(w http.ResponseWriter, r *http.Request) {
 
 // HandleReorderCategories updates category sort orders
 func (s *Server) HandleReorderCategories(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	q := dbgen.New(s.DB)
 
 	var req []struct {
@@ -968,7 +1031,10 @@ func (s *Server) HandleReorderCategories(w http.ResponseWriter, r *http.Request)
 
 // HandleReorderFeeds updates feed sort orders and optionally moves feeds between categories
 func (s *Server) HandleReorderFeeds(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 	q := dbgen.New(s.DB)
 
 	var req []struct {
@@ -1003,7 +1069,10 @@ func (s *Server) HandleReorderFeeds(w http.ResponseWriter, r *http.Request) {
 
 // HandleSearchArticles searches articles by title, content, or summary
 func (s *Server) HandleSearchArticles(w http.ResponseWriter, r *http.Request) {
-	userID, _ := s.ensureUser(r)
+	userID, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
 
 	query := r.URL.Query().Get("q")
 	if query == "" {

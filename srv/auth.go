@@ -128,8 +128,8 @@ func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 
 		case AuthModePassword:
 			if password == "" {
-				slog.Warn("password auth enabled but GORSS_PASSWORD not set")
-				next.ServeHTTP(w, r)
+				slog.Error("password auth enabled but GORSS_PASSWORD not set")
+				http.Error(w, "authentication misconfigured", http.StatusInternalServerError)
 				return
 			}
 

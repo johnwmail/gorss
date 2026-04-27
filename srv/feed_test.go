@@ -37,6 +37,7 @@ func TestFeedFetcher_Fetch(t *testing.T) {
 	defer server.Close()
 
 	fetcher := NewFeedFetcher()
+	fetcher.AllowPrivateURLs = true
 	result, err := fetcher.Fetch(context.Background(), server.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -77,6 +78,7 @@ func TestFeedFetcher_FetchConditional_NotModified(t *testing.T) {
 	defer server.Close()
 
 	fetcher := NewFeedFetcher()
+	fetcher.AllowPrivateURLs = true
 	_, err := fetcher.FetchConditional(context.Background(), server.URL, `"test-etag"`, "Mon, 01 Jan 2024 00:00:00 GMT")
 	if err != errNotModified {
 		t.Fatalf("expected errNotModified, got %v", err)
@@ -91,6 +93,7 @@ func TestFeedFetcher_Fetch_Error(t *testing.T) {
 	defer server.Close()
 
 	fetcher := NewFeedFetcher()
+	fetcher.AllowPrivateURLs = true
 	_, err := fetcher.Fetch(context.Background(), server.URL)
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -233,6 +236,7 @@ func TestFeedFetcher_InvalidXML(t *testing.T) {
 	defer server.Close()
 
 	fetcher := NewFeedFetcher()
+	fetcher.AllowPrivateURLs = true
 	_, err := fetcher.Fetch(context.Background(), server.URL)
 	if err == nil {
 		t.Error("expected error for invalid XML, got nil")
@@ -270,6 +274,7 @@ func TestFeedFetcher_MultipleItems(t *testing.T) {
 	defer server.Close()
 
 	fetcher := NewFeedFetcher()
+	fetcher.AllowPrivateURLs = true
 	result, err := fetcher.Fetch(context.Background(), server.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
