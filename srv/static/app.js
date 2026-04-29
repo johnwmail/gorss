@@ -538,6 +538,10 @@
         fetch('/api/feeds'),
         fetch('/api/categories')
       ]);
+      if (!feedsRes.ok || !catsRes.ok) {
+        console.error('Failed to load feeds:', feedsRes.status, catsRes.status);
+        return;
+      }
       feeds = await feedsRes.json();
       categories = await catsRes.json();
       renderFeeds();
